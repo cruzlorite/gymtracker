@@ -43,6 +43,7 @@ export const loadPicker = () =>
 // ---------- login ----------
 let token = null;
 let tokenExp = 0;
+let forceConsent = false;
 const HINT_KEY = 'gt:hint';
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const lsSet = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch { /* sin storage */ } };
@@ -59,8 +60,13 @@ export function signIn() {
       callback: (r) => {
         if (r.error) return reject(new Error(r.error_description || r.error));
         if (!oauth.hasGrantedAllScopes(r, SCOPE_FILE)) {
-          return reject(new Error('Hace falta el permiso de Google Drive para guardar los entrenos en tu hoja.'));
+          // Google muestra los permisos como casillas y la de Drive viene sin marcar: al reintentar,
+          // forzamos la pantalla de permisos para que vuelva a aparecer.
+          forceConsent = true;
+          return reject(new Error('Falta el permiso de Google Drive. Vuelve a entrar y, en la ventana de Google, marca la casilla '
+            + '«Ver, editar, crear y eliminar solo los archivos específicos de Google Drive que uses con esta aplicación».'));
         }
+        forceConsent = false;
         token = r.access_token;
         tokenExp = Date.now() + (Number(r.expires_in || 3600) - 60) * 1000;
         resolve();
@@ -71,7 +77,8 @@ export function signIn() {
             : 'No se pudo iniciar sesión con Google.')),
     });
     const hint = savedHint();
-    client.requestAccessToken(hint ? { prompt: '', login_hint: hint } : { prompt: '' });
+    const prompt = forceConsent ? 'consent' : '';
+    client.requestAccessToken(hint ? { prompt, login_hint: hint } : { prompt });
   });
 }
 

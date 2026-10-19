@@ -56,7 +56,7 @@ function toast(msg, { error = false, action, onAction } = {}) {
   $toast.className = `show${error ? ' error' : ''}`;
   $toast.innerHTML = `<span>${esc(msg)}</span>${action ? `<button class="btn small" data-toast-action>${esc(action)}</button>` : ''}`;
   if (action) $toast.querySelector('[data-toast-action]').onclick = () => { $toast.className = ''; onAction(); };
-  toastTimer = setTimeout(() => { $toast.className = ''; }, action ? 15000 : 4000);
+  toastTimer = setTimeout(() => { $toast.className = ''; }, action ? 15000 : error ? 10000 : 4000);
 }
 
 async function run(fn) {
@@ -142,6 +142,7 @@ function landing() {
           : `<div class="notice"><strong>Falta configurar Google.</strong> Rellena <code>config.js</code> siguiendo el README para activar el login. Mientras tanto, puedes probar la demo.</div>`}
         <button class="btn ${configured ? 'ghost' : 'primary big'}" data-action="demo">Probar con datos de ejemplo</button>
       </div>
+      ${configured ? '<p class="fine">Al entrar, Google te pedirá permisos: <strong>marca la casilla de Google Drive</strong>. La app solo accede a las hojas que crea ella o que eliges tú.</p>' : ''}
       <p class="fine">Sin servidor: los datos de cada grupo viven en una hoja de cálculo del Google Drive de quien lo crea. <a href="privacy.html">Privacidad</a></p>
     </div>
   </main>`;
