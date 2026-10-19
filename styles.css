@@ -65,6 +65,9 @@ p { margin: 0; }
 a { color: var(--accent-text); text-underline-offset: 2px; }
 button, input, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
+/* Pinch-zoom stays available (accessibility), but double-tap zoom is off on controls: tapping + twice
+   quickly must add two steps, not zoom the page. */
+button, a, input, select, label, [role=button] { touch-action: manipulation; }
 code { background: var(--surface-2); padding: .1em .35em; border-radius: 6px; font-size: .92em; }
 img { max-width: 100%; }
 .ic { width: 20px; height: 20px; flex: none; }
@@ -729,6 +732,24 @@ dialog[open] { animation: pop .18s ease-out; }
   .step-input { font-size: 32px; }
   .stats-row strong { font-size: 19px; }
 }
+/* ============ Touch targets ============ */
+/* On touch screens every control is at least 44px (Apple's and Google's guideline); mouse users keep the compact sizes. */
+@media (pointer: coarse) {
+  .chip, .lang-btn, .person { height: 44px; }
+  .seg button, .seg.wide button { height: 44px; }
+  .icon-btn, .icon-btn.sm { width: 44px; height: 44px; }
+  .icon-btn.armed { height: 44px; }
+  .btn.sm { height: 44px; }
+  .group-btn { height: 44px; }
+  .avatar-btn { padding: 5px; margin-right: -5px; }
+  .sync { height: 44px; padding: 0 14px; }
+  .chip-btn { height: 44px; min-width: 48px; }
+  .restbar-row { padding: 6px 6px 6px 16px; }
+  .table .link { display: block; padding: 12px 0; margin: -10px 0; }
+  .landing-foot a { display: inline-block; padding: 12px 4px; margin: -12px 0; }
+  .fine a, .notice a { display: inline-block; padding: 14px 0; margin: -14px 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
