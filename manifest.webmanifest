@@ -1,7 +1,7 @@
 {
   "name": "GymTracker",
   "short_name": "GymTracker",
-  "description": "Registra tus entrenos serie a serie y compite con tus amigos.",
+  "description": "Log every set, rest with a built-in timer and compete with your friends.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

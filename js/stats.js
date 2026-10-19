@@ -1,4 +1,4 @@
-// Cálculos puros: no tocan la red ni el DOM.
+// Pure calculations: no network, no DOM.
 
 export function toISO(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -8,14 +8,14 @@ export function parseISO(s) {
   const [y, m, d] = s.split('-').map(Number);
   return new Date(y, m - 1, d);
 }
-/** ¿Es una fecha real con formato AAAA-MM-DD? (la hoja la puede editar cualquiera a mano) */
+/** Is it a real date in YYYY-MM-DD format? (anyone can edit the sheet by hand) */
 export const isISODate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s) && toISO(parseISO(s)) === s;
 export function addDays(s, n) {
   const d = parseISO(s);
   d.setDate(d.getDate() + n);
   return toISO(d);
 }
-/** Lunes de la semana de una fecha. */
+/** Monday of the week containing a date. */
 export function weekStart(s) {
   const d = parseISO(s);
   d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
@@ -29,7 +29,7 @@ export function periodRange(p) {
 }
 const inRange = (e, r) => !r || (e.date >= r.from && e.date <= r.to);
 
-/** 1RM estimado (Epley). */
+/** Estimated 1RM (Epley). */
 export function e1rm(weight, reps) {
   const w = +weight || 0, r = +reps || 0;
   if (!w || !r) return 0;
@@ -47,7 +47,7 @@ export function volume(entries, r, exercise) {
     .reduce((s, e) => s + (+e.sets || 0) * (+e.reps || 0) * (+e.weight || 0), 0);
 }
 
-/** Semanas consecutivas (hasta hoy) con al menos un día de gym. La semana actual no rompe la racha. */
+/** Consecutive weeks (up to today) with at least one gym day. The current week doesn't break the streak. */
 export function weekStreak(entries) {
   const weeks = new Set(entries.map(e => weekStart(e.date)));
   let w = weekStart(todayISO());
@@ -58,10 +58,10 @@ export function weekStreak(entries) {
 }
 
 export function exercises(entries) {
-  return [...new Set(entries.map(e => e.exercise).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
+  return [...new Set(entries.map(e => e.exercise).filter(Boolean))].sort((a, b) => a.localeCompare(b));
 }
 
-/** Mejor 1RM estimado de cada día para un ejercicio. */
+/** Best estimated 1RM per day for an exercise. */
 export function bestByDate(entries, exercise) {
   const m = new Map();
   for (const e of entries) {
@@ -73,9 +73,9 @@ export function bestByDate(entries, exercise) {
 }
 
 /**
- * Mejora en el periodo: para cada ejercicio con al menos 2 días, compara el 1RM estimado del
- * primer día con el mejor de los días siguientes. La nota es la media entre ejercicios,
- * así que es justa entre gente de niveles distintos.
+ * Improvement in a period: for each exercise with at least 2 days, compares the first day's
+ * estimated 1RM with the best of the following days. The score is the average across exercises,
+ * so it's fair between people of different levels.
  */
 export function improvement(entries, r, exercise) {
   const scoped = entries.filter(e => inRange(e, r));
@@ -91,7 +91,7 @@ export function improvement(entries, r, exercise) {
   return { score, details };
 }
 
-/** Marcas personales por ejercicio. */
+/** Personal records per exercise. */
 export function prs(entries) {
   const out = new Map();
   for (const e of entries) {
@@ -103,16 +103,16 @@ export function prs(entries) {
     if ((+e.weight || 0) > cur.weight) cur.weight = +e.weight;
     out.set(e.exercise, cur);
   }
-  return [...out.values()].sort((a, b) => a.exercise.localeCompare(b.exercise, 'es'));
+  return [...out.values()].sort((a, b) => a.exercise.localeCompare(b.exercise));
 }
 
-/** Valor de un participante en un reto (null = sin datos suficientes). */
+/** A participant's value in a challenge (null = not enough data). */
 export function challengeValue(ch, entries) {
   const r = { from: ch.start, to: ch.end };
   switch (ch.type) {
-    case 'asistencia': return attendance(entries, r);
-    case 'volumen': return volume(entries, r, ch.exercise || null);
-    case 'mejora': {
+    case 'attendance': return attendance(entries, r);
+    case 'volume': return volume(entries, r, ch.exercise || null);
+    case 'improvement': {
       const s = improvement(entries, r, ch.exercise || null).score;
       return s == null ? null : s * 100;
     }
@@ -121,8 +121,8 @@ export function challengeValue(ch, entries) {
 }
 
 /**
- * Ids de las series que fueron récord personal en su momento: superan el mejor 1RM estimado de todas
- * las series anteriores del mismo ejercicio. La primera serie de un ejercicio no cuenta como récord.
+ * Ids of the sets that were a personal record when logged: they beat the best estimated 1RM of every
+ * earlier set of the same exercise. The very first set of an exercise doesn't count as a record.
  */
 export function prIds(entries) {
   const best = new Map();
@@ -138,14 +138,14 @@ export function prIds(entries) {
   return out;
 }
 
-/** Series de un ejercicio en el último día anterior a `before` en que se hizo. */
+/** Sets of an exercise on the last day before `before` it was done. */
 export function lastSession(entries, exercise, before) {
   let date = '';
   for (const e of entries) if (e.exercise === exercise && e.date < before && e.date > date) date = e.date;
   return date ? { date, sets: entries.filter((e) => e.exercise === exercise && e.date === date) } : null;
 }
 
-/** Historial de un ejercicio agrupado por día, del más reciente al más antiguo. */
+/** An exercise's history grouped by day, newest first. */
 export function exerciseHistory(entries, exercise) {
   const m = new Map();
   for (const e of entries) {

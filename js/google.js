@@ -1,5 +1,5 @@
-// Todo lo que habla con Google: login, Drive, Sheets y el selector de archivos (Picker).
-// No hay servidor: el navegador usa el token del propio usuario contra las APIs de Google.
+// Everything that talks to Google: sign-in, Drive, Sheets and the file picker.
+// There is no server: the browser calls Google's APIs with the user's own token.
 import { CONFIG } from '../config.js';
 import { t } from './i18n.js';
 import { isISODate, todayISO, toISO } from './stats.js';
@@ -9,17 +9,18 @@ const SCOPES = `${SCOPE_FILE} openid email profile`;
 const SHEETS = 'https://sheets.googleapis.com/v4/spreadsheets';
 const DRIVE = 'https://www.googleapis.com/drive/v3/files';
 
-// El formato de la hoja no depende del idioma de la app: los nombres de pestañas y columnas son fijos.
+// The sheet format doesn't depend on the app language: tab and column names are fixed.
 export const TITLE_PREFIX = 'GymTracker · ';
-export const TAB = { group: '_grupo', members: '_miembros', challenges: '_retos', exercises: '_ejercicios' };
+export const TAB = { group: '_group', members: '_members', challenges: '_challenges', exercises: '_exercises' };
 const HEADERS = {
-  group: ['clave', 'valor'],
-  members: ['email', 'nombre', 'foto', 'alta'],
-  challenges: ['id', 'titulo', 'tipo', 'ejercicio', 'inicio', 'fin', 'creado_por'],
-  exercises: ['nombre', 'categoria', 'creado_por'],
-  entries: ['id', 'fecha', 'ejercicio', 'series', 'reps', 'kg', 'notas'],
+  group: ['key', 'value'],
+  members: ['email', 'name', 'picture', 'joined'],
+  challenges: ['id', 'title', 'type', 'exercise', 'start', 'end', 'created_by'],
+  exercises: ['name', 'category', 'created_by'],
+  entries: ['id', 'date', 'exercise', 'sets', 'reps', 'weight_kg', 'notes'],
 };
-const SCHEMA_VERSION = 1;
+// Stored in the file's Drive appProperties too, so sheets from older formats aren't listed.
+const SCHEMA_VERSION = '2';
 
 export class AuthError extends Error {
   constructor() { super(t('err.session')); this.name = 'AuthError'; }
@@ -28,7 +29,7 @@ export class AuthError extends Error {
 export const isConfigured = () => Boolean(CONFIG.CLIENT_ID);
 export const sheetUrl = (id) => `https://docs.google.com/spreadsheets/d/${id}/edit`;
 
-// ---------- carga de scripts de Google ----------
+// ---------- loading Google's scripts ----------
 const scripts = {};
 function loadScript(src) {
   return (scripts[src] ||= new Promise((resolve, reject) => {
@@ -43,17 +44,17 @@ export const loadGis = () => loadScript('https://accounts.google.com/gsi/client'
 export const loadPicker = () =>
   loadScript('https://apis.google.com/js/api.js').then(() => new Promise((r) => window.gapi.load('picker', r)));
 
-// ---------- login ----------
+// ---------- sign-in ----------
 let token = null;
 let tokenExp = 0;
 let forceConsent = false;
 const HINT_KEY = 'gt:hint';
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
-const lsSet = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch { /* sin storage */ } };
+const lsSet = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch { /* no storage */ } };
 export const savedHint = () => lsGet(HINT_KEY) || '';
 export const tokenValid = () => Boolean(token) && Date.now() < tokenExp;
 
-/** Abre el popup de Google. Hay que llamarla directamente desde un clic, antes de cualquier await. */
+/** Opens Google's popup. Must be called directly from a click, before any await. */
 export function signIn() {
   return new Promise((resolve, reject) => {
     const oauth = window.google?.accounts?.oauth2;
@@ -64,8 +65,8 @@ export function signIn() {
       callback: (r) => {
         if (r.error) return reject(new Error(r.error_description || r.error));
         if (!oauth.hasGrantedAllScopes(r, SCOPE_FILE)) {
-          // Google muestra los permisos como casillas y la de Drive viene sin marcar: al reintentar,
-          // forzamos la pantalla de permisos para que vuelva a aparecer.
+          // Google shows permissions as checkboxes and the Drive one starts unticked: on retry,
+          // force the consent screen so it shows up again.
           forceConsent = true;
           return reject(new Error(t('err.drivePerm')));
         }
@@ -102,7 +103,7 @@ async function api(url, { method = 'GET', body, query } = {}) {
   if (res.status === 401) throw new AuthError();
   if (!res.ok) {
     let msg = '';
-    try { msg = (await res.json()).error?.message || ''; } catch { /* sin cuerpo */ }
+    try { msg = (await res.json()).error?.message || ''; } catch { /* no body */ }
     const err = new Error(msg || t('err.google', { status: res.status }));
     err.status = res.status;
     throw err;
@@ -117,8 +118,8 @@ export async function getProfile() {
 }
 
 /**
- * Selector de archivos de Google. Al elegir la hoja, Google le da permiso a la app
- * (scope drive.file) sobre ese archivo concreto. Devuelve el id o null si se cancela.
+ * Google's file picker. Picking the sheet grants the app access (drive.file scope) to that
+ * specific file. Returns its id, or null if cancelled.
  */
 export async function pickSheet(fileId) {
   await loadPicker();
@@ -140,7 +141,7 @@ export async function pickSheet(fileId) {
   });
 }
 
-// ---------- utilidades de Sheets ----------
+// ---------- Sheets helpers ----------
 const quote = (tab) => `'${tab.replace(/'/g, "''")}'`;
 const enc = encodeURIComponent;
 
@@ -152,7 +153,7 @@ function append(id, tab, rows) {
   });
 }
 
-/** Fechas: si alguien escribe a mano en la hoja, Sheets puede convertirlas en número de serie. */
+/** Dates: if someone types into the sheet by hand, Sheets may turn them into serial numbers. */
 function normDate(v) {
   if (typeof v === 'number') return toISO(new Date(Date.UTC(1899, 11, 30) + v * 864e5 + new Date().getTimezoneOffset() * 6e4));
   return String(v ?? '').trim().slice(0, 10);
@@ -162,10 +163,10 @@ const num = (v) => {
   const n = parseFloat(String(v ?? '').replace(',', '.'));
   return Number.isFinite(n) ? n : 0;
 };
-const CH_TYPES = new Set(['asistencia', 'volumen', 'mejora']);
+const CH_TYPES = new Set(['attendance', 'volume', 'improvement']);
 const entryRow = (e) => [e.id, e.date, e.exercise, e.sets, e.reps, e.weight, e.notes || ''];
 
-/** Solo fotos de perfil de Google: una URL arbitraria en _miembros revelaría la IP de quien abre la app. */
+/** Google profile pictures only: an arbitrary URL in _members would reveal the IP of everyone opening the app. */
 function safePicture(v) {
   try {
     const u = new URL(String(v || ''));
@@ -177,9 +178,9 @@ const isWholeSheet = (r = {}, sheetId) => (r.sheetId ?? 0) === sheetId
   && r.startRowIndex == null && r.endRowIndex == null && r.startColumnIndex == null && r.endColumnIndex == null;
 
 /**
- * ¿La pestaña es de quien dice su título? Cualquier editor puede crear una pestaña con el email de
- * otro, pero los editores de una protección solo los ven el dueño de la hoja y quien puede editarla.
- * true = verificada · false = sin proteger o suplantada · null = no se puede comprobar desde esta cuenta.
+ * Does the tab really belong to the person in its title? Any editor can create a tab named after
+ * someone else, but a protection's editors are only visible to the sheet owner and to whoever can edit it.
+ * true = verified · false = unprotected or impersonated · null = can't be checked from this account.
  */
 function tabOwnership(tab, ownerEmail) {
   const email = tab.title.toLowerCase();
@@ -194,7 +195,7 @@ function tabOwnership(tab, ownerEmail) {
   });
 }
 
-// ---------- almacenamiento en Google Sheets ----------
+// ---------- Google Sheets storage ----------
 export class SheetStore {
   kind = 'google';
 
@@ -204,7 +205,7 @@ export class SheetStore {
   }
 
   async listGroups() {
-    const q = `appProperties has { key='app' and value='${CONFIG.APP_TAG}' } and trashed=false`;
+    const q = `appProperties has { key='app' and value='${CONFIG.APP_TAG}' } and appProperties has { key='schema' and value='${SCHEMA_VERSION}' } and trashed=false`;
     const r = await api(DRIVE, {
       query: { q, pageSize: 100, orderBy: 'modifiedTime desc', fields: 'files(id,name,ownedByMe,owners(displayName))' },
     });
@@ -230,7 +231,7 @@ export class SheetStore {
       body: {
         valueInputOption: 'RAW',
         data: [
-          { range: `${TAB.group}!A1`, values: [HEADERS.group, ['version', SCHEMA_VERSION], ['app', CONFIG.APP_TAG]] },
+          { range: `${TAB.group}!A1`, values: [HEADERS.group, ['schema', SCHEMA_VERSION], ['app', CONFIG.APP_TAG]] },
           { range: `${TAB.members}!A1`, values: [HEADERS.members] },
           { range: `${TAB.challenges}!A1`, values: [HEADERS.challenges] },
           { range: `${TAB.exercises}!A1`, values: [HEADERS.exercises] },
@@ -240,12 +241,14 @@ export class SheetStore {
     await api(`${SHEETS}/${id}:batchUpdate`, {
       method: 'POST',
       body: { requests: [{ addProtectedRange: { protectedRange: {
-        range: { sheetId: groupSheetId }, description: 'Configuración del grupo', editors: { users: [this.me.email] },
+        range: { sheetId: groupSheetId }, description: 'Group settings', editors: { users: [this.me.email] },
       } } }] },
     });
-    // Marca invisible para encontrar las hojas de la app sin escanear todo el Drive.
-    // writersCanShare: solo quien crea el grupo puede compartir la hoja con más gente.
-    await api(`${DRIVE}/${id}`, { method: 'PATCH', body: { appProperties: { app: CONFIG.APP_TAG }, writersCanShare: false } });
+    // Invisible tag to find the app's sheets without scanning the whole Drive.
+    // writersCanShare: only the group creator can share the sheet with more people.
+    await api(`${DRIVE}/${id}`, {
+      method: 'PATCH', body: { appProperties: { app: CONFIG.APP_TAG, schema: SCHEMA_VERSION }, writersCanShare: false },
+    });
     await this.join(id);
     return id;
   }
@@ -260,7 +263,7 @@ export class SheetStore {
     return api(`${DRIVE}/${id}`, { query: { fields: 'ownedByMe,writersCanShare,owners(displayName,emailAddress),capabilities(canShare)' } });
   }
 
-  /** Crea la pestaña del usuario (protegida: solo la edita él) y lo apunta en _miembros. */
+  /** Creates the user's tab (protected so only they can edit it) and adds them to _members. */
   async join(id) {
     const me = this.me;
     const [{ tabs }, file] = await Promise.all([this.tabs(id), this.file(id)]);
@@ -278,7 +281,7 @@ export class SheetStore {
         body: { requests: [
           { addSheet: { properties: { sheetId, title: me.email } } },
           { addProtectedRange: { protectedRange: {
-            range: { sheetId }, description: `Entrenos de ${me.name}: solo los edita su dueño`, editors: { users: [me.email] },
+            range: { sheetId }, description: `${me.name}'s workouts: only the owner can edit`, editors: { users: [me.email] },
           } } },
         ] },
       });
@@ -295,7 +298,7 @@ export class SheetStore {
   async loadGroup(id) {
     const [{ title, tabs }, file] = await Promise.all([this.tabs(id), this.file(id)]);
     const ownerEmail = file.owners?.[0]?.emailAddress?.toLowerCase();
-    // Grupos creados antes de este ajuste: el dueño cierra la hoja para que los demás no la compartan.
+    // Safety net: the owner closes the sheet so other members can't re-share it.
     if (file.ownedByMe && file.writersCanShare !== false) {
       api(`${DRIVE}/${id}`, { method: 'PATCH', body: { writersCanShare: false } }).catch(() => {});
     }
@@ -311,13 +314,14 @@ export class SheetStore {
     this.meta.set(id, { myTab: userTabs.find((x) => x.title.toLowerCase() === this.me.email) || null, hasExercises });
 
     const params = new URLSearchParams({ valueRenderOption: 'UNFORMATTED_VALUE' });
+    // Without an _exercises tab, that slot re-reads _members and is discarded below.
     [`${TAB.members}!A2:D`, `${TAB.challenges}!A2:G`, `${hasExercises ? TAB.exercises : TAB.members}!A2:C`,
       ...userTabs.map((x) => `${quote(x.title)}!A2:G`)]
       .forEach((r) => params.append('ranges', r));
     const res = await api(`${SHEETS}/${id}/values:batchGet?${params}`);
     const [memberRows, challengeRows, exerciseRows, ...entryRows] = res.valueRanges.map((v) => v.values || []);
 
-    // Solo cuenta como miembro quien tiene una pestaña válida: una fila suelta en _miembros no basta.
+    // Only people with a valid tab count as members: a stray row in _members isn't enough.
     const tabEmails = new Set(userTabs.map((x) => x.title.toLowerCase()));
     const members = [];
     for (const r of memberRows) {
@@ -330,7 +334,7 @@ export class SheetStore {
     userTabs.forEach((tab, i) => {
       const email = tab.title.toLowerCase();
       if (!members.some((m) => m.email === email)) members.push({ email, name: email.split('@')[0], picture: '', joined: '' });
-      const seen = new Set(); // un reintento de red puede duplicar una fila: el id manda
+      const seen = new Set(); // a network retry can duplicate a row: the id wins
       for (const r of entryRows[i]) {
         const date = normDate(r[1]);
         const entryId = String(r[0] || '');
@@ -342,13 +346,13 @@ export class SheetStore {
         });
       }
     });
-    // Un reto con fechas o tipo inválidos (editado a mano) se ignora en vez de romper la vista.
+    // A challenge with invalid dates or type (edited by hand) is ignored instead of breaking the view.
     const challenges = challengeRows.map((r) => ({
-      id: String(r[0] || ''), title: String(r[1] || ''), type: String(r[2] || 'asistencia'), exercise: String(r[3] || ''),
+      id: String(r[0] || ''), title: String(r[1] || ''), type: String(r[2] || 'attendance'), exercise: String(r[3] || ''),
       start: normDate(r[4]), end: normDate(r[5]), createdBy: String(r[6] || '').toLowerCase(),
     })).filter((c) => c.id && c.title && CH_TYPES.has(c.type) && isISODate(c.start) && isISODate(c.end) && c.start <= c.end);
     const exercises = hasExercises
-      ? exerciseRows.filter((r) => String(r[0] || '').trim()).map((r) => ({ name: String(r[0]).trim().slice(0, 60), cat: String(r[1] || 'otros') }))
+      ? exerciseRows.filter((r) => String(r[0] || '').trim()).map((r) => ({ name: String(r[0]).trim().slice(0, 60), cat: String(r[1] || 'other') }))
       : [];
     return {
       id,
@@ -370,8 +374,8 @@ export class SheetStore {
   }
 
   /**
-   * Filas (base 0, sin la cabecera) de un registro en mi pestaña. Normalmente una; más si un reintento
-   * de red duplicó el alta. Vacío si ya no está.
+   * Rows (0-based, header excluded) of an entry in my tab. Usually one; more if a network retry
+   * duplicated the insert. Empty if it's gone.
    */
   async #rowsOf(id, tab, entryId) {
     const r = await api(`${SHEETS}/${id}/values/${enc(`${quote(tab.title)}!A:A`)}`);
@@ -385,7 +389,7 @@ export class SheetStore {
   async updateEntry(id, e) {
     const tab = await this.#myTab(id);
     const rows = await this.#rowsOf(id, tab, e.id);
-    if (!rows.length) return; // lo borraron desde la hoja: nada que actualizar
+    if (!rows.length) return; // deleted from the sheet: nothing to update
     await api(`${SHEETS}/${id}/values:batchUpdate`, {
       method: 'POST',
       body: { valueInputOption: 'RAW', data: rows.map((i) => ({ range: `${quote(tab.title)}!A${i + 1}:G${i + 1}`, values: [entryRow(e)] })) },
@@ -395,8 +399,8 @@ export class SheetStore {
   async deleteEntry(id, entryId) {
     const tab = await this.#myTab(id);
     const rows = await this.#rowsOf(id, tab, entryId);
-    if (!rows.length) return; // ya no estaba: borrar es idempotente
-    // De abajo arriba, para que borrar una fila no desplace las siguientes.
+    if (!rows.length) return; // already gone: deleting is idempotent
+    // Bottom-up, so deleting one row doesn't shift the next ones.
     await api(`${SHEETS}/${id}:batchUpdate`, {
       method: 'POST',
       body: { requests: rows.reverse().map((i) => ({ deleteDimension: { range: { sheetId: tab.sheetId, dimension: 'ROWS', startIndex: i, endIndex: i + 1 } } })) },
@@ -407,7 +411,7 @@ export class SheetStore {
     return append(id, TAB.challenges, [[c.id, c.title, c.type, c.exercise || '', c.start, c.end, this.me.email]]);
   }
 
-  /** Ejercicio propio del grupo. Los grupos antiguos no tienen la pestaña: se crea la primera vez. */
+  /** A group's custom exercise. Creates the _exercises tab first if it's missing. */
   async addExercise(id, ex) {
     if (!this.meta.get(id)?.hasExercises) {
       const { tabs } = await this.tabs(id);
@@ -424,7 +428,7 @@ export class SheetStore {
     await append(id, TAB.exercises, [[ex.name, ex.cat, this.me.email]]);
   }
 
-  /** Comparte la hoja desde el Drive del usuario. Google envía el email con el enlace de invitación. */
+  /** Shares the sheet from the user's Drive. Google sends the invitation email with the link. */
   invite(id, email, link) {
     return api(`${DRIVE}/${id}/permissions`, {
       method: 'POST',

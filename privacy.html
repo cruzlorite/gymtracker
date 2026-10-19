@@ -23,16 +23,16 @@
     html[lang="es"] [data-lang-block="es"], html[lang="en"] [data-lang-block="en"] { display: block; }
   </style>
   <script>
-    // Mismo idioma que la app (Ajustes) o, si no se ha elegido, el del navegador.
+    // Same language as the app (Settings) or, if none was chosen, the browser's.
     (function () {
       var l = null;
-      try { l = localStorage.getItem('gt:lang'); } catch (e) { /* sin storage */ }
+      try { l = localStorage.getItem('gt:lang'); } catch (e) { /* no storage */ }
       if (l !== 'es' && l !== 'en') l = (navigator.language || '').toLowerCase().indexOf('es') === 0 ? 'es' : 'en';
       document.documentElement.lang = l;
       try {
         var p = JSON.parse(localStorage.getItem('gt:prefs') || '{}');
         if (p.theme === 'light' || p.theme === 'dark') document.documentElement.dataset.theme = p.theme;
-      } catch (e) { /* nada */ }
+      } catch (e) { /* ignore */ }
     })();
   </script>
 </head>
@@ -132,7 +132,7 @@
       document.querySelectorAll('[data-set-lang]').forEach(function (b) {
         b.addEventListener('click', function () {
           document.documentElement.lang = b.dataset.setLang;
-          try { localStorage.setItem('gt:lang', b.dataset.setLang); } catch (e) { /* nada */ }
+          try { localStorage.setItem('gt:lang', b.dataset.setLang); } catch (e) { /* ignore */ }
           paint();
         });
       });

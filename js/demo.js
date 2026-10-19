@@ -1,4 +1,4 @@
-// Modo demo: misma interfaz que SheetStore, con datos inventados en memoria.
+// Demo mode: same interface as SheetStore, with made-up in-memory data.
 import { t } from './i18n.js';
 import { addDays, parseISO, todayISO, weekStart } from './stats.js';
 
@@ -13,23 +13,23 @@ function rng(seed) { // mulberry32
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
 const ROUTINES = [
-  ['Press banca', 'Press militar', 'Fondos'],
-  ['Sentadilla', 'Peso muerto rumano', 'Zancadas'],
-  ['Dominadas lastradas', 'Remo con barra', 'Curl bíceps'],
-  ['Peso muerto', 'Press banca', 'Sentadilla'],
+  ['Bench press', 'Overhead press', 'Dips'],
+  ['Squat', 'Romanian deadlift', 'Lunges'],
+  ['Weighted pull-ups', 'Barbell row', 'Barbell curl'],
+  ['Deadlift', 'Bench press', 'Squat'],
 ];
 
 const PEOPLE = [
-  { email: 'tu@demo.local', name: null, rate: 0.5, gain: 0.10, base: { 'Press banca': 70, 'Sentadilla': 95, 'Peso muerto': 120 } },
-  { email: 'ana@demo.local', name: 'Ana', rate: 0.62, gain: 0.16, base: { 'Press banca': 45, 'Sentadilla': 80, 'Peso muerto': 100 } },
-  { email: 'pablo@demo.local', name: 'Pablo', rate: 0.45, gain: 0.05, base: { 'Press banca': 100, 'Sentadilla': 140, 'Peso muerto': 175 } },
-  { email: 'lucia@demo.local', name: 'Lucía', rate: 0.55, gain: 0.12, base: { 'Press banca': 52, 'Sentadilla': 90, 'Peso muerto': 115 } },
-  { email: 'marcos@demo.local', name: 'Marcos', rate: 0.3, gain: 0.08, base: { 'Press banca': 85, 'Sentadilla': 110, 'Peso muerto': 140 } },
+  { email: 'tu@demo.local', name: null, rate: 0.5, gain: 0.10, base: { 'Bench press': 70, 'Squat': 95, 'Deadlift': 120 } },
+  { email: 'ana@demo.local', name: 'Ana', rate: 0.62, gain: 0.16, base: { 'Bench press': 45, 'Squat': 80, 'Deadlift': 100 } },
+  { email: 'pablo@demo.local', name: 'Pablo', rate: 0.45, gain: 0.05, base: { 'Bench press': 100, 'Squat': 140, 'Deadlift': 175 } },
+  { email: 'lucia@demo.local', name: 'Lucía', rate: 0.55, gain: 0.12, base: { 'Bench press': 52, 'Squat': 90, 'Deadlift': 115 } },
+  { email: 'marcos@demo.local', name: 'Marcos', rate: 0.3, gain: 0.08, base: { 'Bench press': 85, 'Squat': 110, 'Deadlift': 140 } },
 ];
 const RELATIVE = {
-  'Press militar': ['Press banca', 0.62], 'Fondos': ['Press banca', 0.25], 'Peso muerto rumano': ['Peso muerto', 0.72],
-  'Zancadas': ['Sentadilla', 0.45], 'Dominadas lastradas': ['Press banca', 0.2], 'Remo con barra': ['Press banca', 0.8],
-  'Curl bíceps': ['Press banca', 0.3],
+  'Overhead press': ['Bench press', 0.62], 'Dips': ['Bench press', 0.25], 'Romanian deadlift': ['Deadlift', 0.72],
+  'Lunges': ['Squat', 0.45], 'Weighted pull-ups': ['Bench press', 0.2], 'Barbell row': ['Bench press', 0.8],
+  'Barbell curl': ['Bench press', 0.3],
 };
 
 function makeGroup() {
@@ -45,8 +45,8 @@ function makeGroup() {
       const wd = parseISO(date).getDay();
       const p2 = p.rate * (wd === 0 || wd === 6 ? 0.55 : 1.15);
       if (r() > p2) continue;
-      if (d === 0 && p.email === 'tu@demo.local') continue; // hoy, la pantalla de entreno de "Tú" empieza vacía
-      const progress = 1 - d / DAYS;
+      if (d === 0 && p.email === 'tu@demo.local') continue; // today, "You" starts with an empty workout screen
+      const progress = 1 - d / DAYS; // 0 → 1 over the period
       const routine = ROUTINES[k++ % ROUTINES.length];
       routine.forEach((ex, i) => {
         if (i === 2 && r() < 0.35) return;
@@ -54,7 +54,7 @@ function makeGroup() {
         const target = p.base[ref] * f * (1 + p.gain * progress + (r() - 0.5) * 0.06);
         const reps = [5, 6, 8, 10, 12][Math.floor(r() * 5)];
         const weight = Math.max(2.5, Math.round(target / (1 + reps / 30) / 2.5) * 2.5);
-        // Una fila por serie, como se registra en la app; la última serie a veces sale con alguna rep menos.
+        // One row per set, as the app logs them; the last set sometimes comes out a rep or two short.
         const n = 3 + Math.floor(r() * 2);
         for (let s = 0; s < n; s++) {
           const rr = s === n - 1 && r() < 0.4 ? Math.max(1, reps - 1 - Math.floor(r() * 2)) : reps;
@@ -67,10 +67,10 @@ function makeGroup() {
   const monthEnd = addDays(`${addDays(monthStart, 32).slice(0, 8)}01`, -1);
   const nextWeek = addDays(weekStart(today), 7);
   const challenges = [
-    { id: uid(), title: t('demo.ch1'), type: 'asistencia', exercise: '', start: monthStart, end: monthEnd, createdBy: 'ana@demo.local' },
-    { id: uid(), title: t('demo.ch2'), type: 'mejora', exercise: 'Press banca', start: addDays(today, -42), end: addDays(today, 14), createdBy: 'pablo@demo.local' },
-    { id: uid(), title: t('demo.ch3'), type: 'volumen', exercise: 'Sentadilla', start: addDays(today, -150), end: addDays(today, -60), createdBy: 'tu@demo.local' },
-    { id: uid(), title: t('demo.ch4'), type: 'volumen', exercise: '', start: nextWeek, end: addDays(nextWeek, 6), createdBy: 'lucia@demo.local' },
+    { id: uid(), title: t('demo.ch1'), type: 'attendance', exercise: '', start: monthStart, end: monthEnd, createdBy: 'ana@demo.local' },
+    { id: uid(), title: t('demo.ch2'), type: 'improvement', exercise: 'Bench press', start: addDays(today, -42), end: addDays(today, 14), createdBy: 'pablo@demo.local' },
+    { id: uid(), title: t('demo.ch3'), type: 'volume', exercise: 'Squat', start: addDays(today, -150), end: addDays(today, -60), createdBy: 'tu@demo.local' },
+    { id: uid(), title: t('demo.ch4'), type: 'volume', exercise: '', start: nextWeek, end: addDays(nextWeek, 6), createdBy: 'lucia@demo.local' },
   ];
   return { id: 'demo', name: t('demo.groupName'), url: '', members, entries, challenges, exercises: [] };
 }
@@ -85,7 +85,7 @@ export class DemoStore {
 
   #get(id) {
     const g = this.groups.find((x) => x.id === id);
-    if (!g) throw Object.assign(new Error('Grupo no encontrado'), { status: 404 });
+    if (!g) throw Object.assign(new Error('Group not found'), { status: 404 });
     return g;
   }
 

@@ -14,15 +14,15 @@ const $toast = document.getElementById('toast');
 
 const COLORS = ['#5B8DEF', '#F2994A', '#27AE60', '#E056A0', '#9B51E0', '#2DCCD3', '#EB5757', '#F2C94C'];
 const TABS = [['log', 'dumbbell'], ['history', 'calendar'], ['progress', 'chart'], ['group', 'users']];
-const CH_TYPES = ['asistencia', 'volumen', 'mejora'];
+const CH_TYPES = ['attendance', 'volume', 'improvement'];
 const REST_OPTIONS = [60, 90, 120, 150, 180, 240];
 const STEP_OPTIONS = [1, 1.25, 2.5, 5];
 
-// ---------- preferencias de este dispositivo ----------
+// ---------- per-device preferences ----------
 const PREFS_KEY = 'gt:prefs';
 const prefs = { rest: 90, autoRest: true, step: 2.5, theme: 'system' };
-try { Object.assign(prefs, JSON.parse(localStorage.getItem(PREFS_KEY) || '{}')); } catch { /* sin storage */ }
-const savePrefs = () => { try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch { /* nada */ } };
+try { Object.assign(prefs, JSON.parse(localStorage.getItem(PREFS_KEY) || '{}')); } catch { /* no storage */ }
+const savePrefs = () => { try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch { /* ignore */ } };
 function applyTheme() {
   if (prefs.theme === 'system') delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = prefs.theme;
@@ -39,11 +39,11 @@ const S = {
   pendingGroup: params.get('group'), needsPicker: null, chart: null, loadedAt: 0,
 };
 
-// ---------- utilidades ----------
+// ---------- helpers ----------
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ls = {
   get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
-  set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* nada */ } },
+  set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } },
 };
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const cap = (s) => s.charAt(0).toLocaleUpperCase(locale()) + s.slice(1);
@@ -80,7 +80,7 @@ function avatar(m, size = '') {
   const pic = m.picture ? `<img src="${esc(m.picture)}" alt="" referrerpolicy="no-referrer" data-avatar-img>` : '';
   return `<span class="av ${size}" style="--c:${m.color || '#888'}" title="${esc(m.name)}">${esc(initials(m.name))}${pic}</span>`;
 }
-// Fotos que no cargan: se quita la imagen y queda la inicial (sin atributos onerror en el HTML).
+// Pictures that fail to load are removed so the initials show (no onerror attributes in the HTML).
 document.addEventListener('error', (e) => { if (e.target.matches?.('[data-avatar-img]')) e.target.remove(); }, true);
 
 let toastTimer;
@@ -115,7 +115,7 @@ function reconnect() {
   });
 }
 
-// ---------- sesión y grupos ----------
+// ---------- session and groups ----------
 function assignColors(g) {
   g.members.sort((a, b) => (a.joined || '9').localeCompare(b.joined || '9') || a.name.localeCompare(b.name, locale()));
   g.members.forEach((m, i) => { m.color = COLORS[i % COLORS.length]; });
@@ -161,7 +161,7 @@ async function openPending(id) {
   }
 }
 
-// ---------- sincronización ----------
+// ---------- sync ----------
 function renderSync() {
   const el = document.getElementById('sync');
   if (!el) return;
@@ -177,7 +177,7 @@ function renderSync() {
   }
 }
 
-// ---------- render principal ----------
+// ---------- main render ----------
 function render() {
   if (S.chart) { S.chart.destroy(); S.chart = null; }
   document.documentElement.lang = getLang();
@@ -240,9 +240,9 @@ function landing() {
   </main>`;
 }
 
-/** Maqueta decorativa de la pantalla de registro para la portada. */
+/** Decorative mock of the logging screen for the landing page. */
 function heroMock() {
-  const name = Ex.exName('Press banca');
+  const name = Ex.exName('Bench press');
   return `<div class="mock">
     <div class="mock-head"><span class="cat-dot" style="--c:#EB5757"></span><strong>${esc(name)}</strong><span class="muted">${t('day.today')}</span></div>
     <div class="mock-steppers">
@@ -308,7 +308,7 @@ function notMember() {
     `<button class="btn primary lg" data-action="join-current">${t('join.button')}</button>`);
 }
 
-/** Pestañas con el email de alguien que no las controla: se ignoran y se avisa (normalmente solo lo ve quien creó el grupo). */
+/** Tabs named after someone who doesn't control them are ignored and flagged (usually only the group creator sees this). */
 function suspiciousNote() {
   const s = S.group.suspicious || [];
   if (!s.length) return '';
@@ -316,7 +316,7 @@ function suspiciousNote() {
     ${S.group.url ? ` <a href="${esc(S.group.url)}" target="_blank" rel="noopener">${t('suspicious.open')}</a>` : ''}</span></p>`;
 }
 
-// ---------- Entreno ----------
+// ---------- Workout ----------
 function setLine(e, i, prs) {
   const main = e.sets > 1
     ? `<b>${e.sets} × ${fmtN(e.reps)}</b><span class="muted"> · ${fmtW(e.weight)}</span>`
@@ -356,7 +356,7 @@ function viewLog() {
 
   let body;
   if (!es.length) {
-    // Sugerencias: el último entreno antes de este día, para repetirlo ejercicio a ejercicio.
+    // Suggestions: the last workout before this day, to repeat it exercise by exercise.
     const prevDate = [...new Set(all.filter((e) => e.exercise && e.date < day).map((e) => e.date))].sort().pop();
     const prevEx = prevDate ? [...groupByExercise(all.filter((e) => e.date === prevDate && e.exercise)).keys()] : [];
     body = `<section class="empty compact">
@@ -394,7 +394,7 @@ function viewLog() {
     ${es.length ? `<button class="fab" data-action="add-ex">${icon('plus')}<span>${t('log.addExercise')}</span></button>` : ''}`;
 }
 
-// ---------- Calendario ----------
+// ---------- Calendar ----------
 function viewHistory() {
   const [y, mo] = S.month.split('-').map(Number);
   const first = new Date(y, mo - 1, 1);
@@ -445,7 +445,7 @@ function viewHistory() {
     </div>`;
 }
 
-// ---------- Progreso ----------
+// ---------- Progress ----------
 function exerciseOptions(entries) {
   const freq = new Map();
   for (const e of entries) if (e.exercise && e.weight > 0) freq.set(e.exercise, (freq.get(e.exercise) || 0) + 1);
@@ -536,7 +536,7 @@ function mountChart() {
   });
 }
 
-// ---------- Grupo ----------
+// ---------- Group ----------
 function board(title, sub, rows, get, fmt, { note = '', allowNeg = false } = {}) {
   const vals = rows.map((r) => ({ m: r.m, v: get(r) }));
   const ranked = vals.filter((x) => x.v != null).sort((a, b) => b.v - a.v);
@@ -599,7 +599,7 @@ function viewChallenges() {
   const order = { live: 0, upcoming: 1, finished: 2 };
   const list = [...S.group.challenges].map((c) => ({ c, st: challengeStatus(c) }))
     .sort((a, b) => order[a.st.key] - order[b.st.key] || b.c.start.localeCompare(a.c.start));
-  const fmt = (type, v) => (type === 'asistencia' ? t('unit.days', { n: fmtN(v) }) : type === 'volumen' ? fmtKg(v) : `${v > 0 ? '+' : ''}${fmtN(v, 1)} %`);
+  const fmt = (type, v) => (type === 'attendance' ? t('unit.days', { n: fmtN(v) }) : type === 'volume' ? fmtKg(v) : `${v > 0 ? '+' : ''}${fmtN(v, 1)} %`);
   return `<div class="toolbar"><span class="spacer"></span><button class="btn primary" data-action="new-challenge">${icon('plus')} ${t('ch.new')}</button></div>
     ${list.length ? '' : emptyState('flag', t('ch.emptyTitle'), t('ch.emptyText'))}
     <div class="grid">${list.map(({ c, st }) => {
@@ -674,9 +674,9 @@ function viewMembers() {
     </div>`;
 }
 
-// ---------- Hojas a pantalla completa: buscador de ejercicios y registro ----------
+// ---------- Full-screen sheets: exercise picker and set logger ----------
 function openSheet(sheet) {
-  // Una sola entrada en el historial: el botón "atrás" del móvil cierra la hoja.
+  // A single history entry, so the phone's back button closes the sheet.
   if (!S.sheet) history.pushState({ sheet: true }, '');
   S.sheet = sheet;
   renderSheet();
@@ -750,7 +750,7 @@ function pickerList() {
   }
   if (q) return html + (all.length ? all.sort(byName).map(pickRow).join('') : `<p class="muted pad">${t('picker.noResults')}</p>`);
   if (cat === 'all') {
-    // Recientes primero: lo que más se repite en el gimnasio está a un toque.
+    // Recent first: what you repeat most at the gym is one tap away.
     const last = new Map();
     for (const e of mine()) if (e.exercise && (last.get(e.exercise) || '') < e.date) last.set(e.exercise, e.date);
     const recent = [...last].sort((a, b) => (a[1] < b[1] ? 1 : -1)).slice(0, 8).map(([name]) => Ex.exerciseInfo(name));
@@ -764,7 +764,7 @@ function pickerList() {
   return html + all.sort(byName).map(pickRow).join('');
 }
 
-/** Valores iniciales: la última serie de hoy o, si no hay, la primera de la sesión anterior. */
+/** Starting values: today's last set or, failing that, the first set of the previous session. */
 function defaultsFor(name) {
   const es = mine();
   const today = es.filter((e) => e.exercise === name && e.date === S.day);
@@ -860,7 +860,7 @@ function exerciseHistoryView(name) {
     </li>`).join('')}</ul>`;
 }
 
-/** Actualiza solo el buscador al teclear, sin repintar la hoja (no se pierde el foco ni el teclado). */
+/** Updates only the results while typing, without re-rendering the sheet (keeps focus and the keyboard open). */
 function refreshPicker() {
   const list = document.getElementById('picker-list');
   if (list) list.innerHTML = pickerList();
@@ -881,7 +881,7 @@ function step(field, dir) {
   if (!input) return;
   const cur = numIn(input.value);
   const inc = field === 'w' ? prefs.step : 1;
-  // Al pulsar +/−, se redondea al múltiplo del incremento (82,3 → 82,5 con saltos de 2,5).
+  // +/− snaps to a multiple of the increment (82.3 → 82.5 with 2.5 steps).
   let next = dir > 0 ? Math.floor(cur / inc + 1e-9) * inc + inc : Math.ceil(cur / inc - 1e-9) * inc - inc;
   next = Math.max(field === 'w' ? 0 : 1, Math.round(next * 100) / 100);
   input.value = showNum(next);
@@ -889,7 +889,7 @@ function step(field, dir) {
   navigator.vibrate?.(8);
 }
 
-// Mantener pulsado +/− repite el paso, como en las apps nativas.
+// Holding +/− repeats the step, like native apps.
 let holdTimer = null;
 let holdRepeat = null;
 let held = false;
@@ -926,16 +926,16 @@ function saveSet() {
     S.group.entries.push({ ...entry, email: S.me.email });
     S.outbox.add(gid, entry);
     if (St.prIds(mine()).has(entry.id)) toast(t('ex.newPr'), { ic: 'trophy' });
-    // Solo al entrenar de verdad: rellenar un día pasado no necesita descanso.
+    // Only while actually training: back-filling a past day doesn't need rest.
     if (prefs.autoRest && S.day === St.todayISO()) Timer.start(prefs.rest);
     navigator.vibrate?.(20);
   }
-  // Sesión caducada: se renueva aprovechando este clic (el popup de Google necesita un gesto del usuario).
+  // Expired session: renew it using this click (Google's popup needs a user gesture).
   if (S.store.kind === 'google' && !G.tokenValid()) G.signIn().then(() => S.outbox.flush(), () => {});
   renderSheet();
 }
 
-// ---------- modales ----------
+// ---------- modals ----------
 function openModal(html, cls = '') {
   $modal.className = cls;
   $modal.innerHTML = `<div class="modal-body">${html}</div>`;
@@ -1077,9 +1077,9 @@ function syncErrorModal() {
     </footer>`);
 }
 
-// ---------- acciones ----------
+// ---------- actions ----------
 function armed(el, label) {
-  // Confirmación en dos toques (confirm() no funciona en todos los navegadores embebidos).
+  // Two-tap confirmation (confirm() doesn't work in every embedded browser).
   if (el.dataset.armed) return true;
   el.dataset.armed = '1';
   const prev = el.innerHTML;
@@ -1096,7 +1096,7 @@ function removeEntry(id) {
 
 const actions = {
   login: () => run(async () => {
-    await G.signIn(); // primera línea: debe ir pegada al clic para que no se bloquee el popup
+    await G.signIn(); // first line: must run right in the click so the popup isn't blocked
     const me = await G.getProfile();
     startSession(new G.SheetStore(me), me, `gt:outbox:${me.email}`);
     G.loadPicker().catch(() => {});
@@ -1299,7 +1299,7 @@ document.addEventListener('click', (e) => {
   if (el.dataset.step) return;
   actions[el.dataset.action]?.(el, e);
 });
-// Los +/− van aparte: un toque suma un paso, salvo si ya se repitió al mantener pulsado.
+// +/− are handled separately: a tap adds one step, unless holding already repeated it.
 $sheet.addEventListener('click', (e) => {
   const b = e.target.closest('[data-step]');
   if (!b) return;
@@ -1332,7 +1332,7 @@ document.addEventListener('change', (e) => {
 $modal.addEventListener('click', (e) => { if (e.target === $modal) closeModal(); });
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { applyTheme(); if (S.tab === 'progress') render(); });
 
-// Al volver a la app: se suben los cambios pendientes y, si hace rato, se recargan los datos del grupo.
+// When returning to the app: upload pending changes and, if it's been a while, reload the group.
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible' || !S.group) return;
   S.outbox?.flush();
@@ -1341,7 +1341,7 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('online', () => S.outbox?.flush());
 
-// ---------- arranque ----------
+// ---------- startup ----------
 applyTheme();
 render();
 if (G.isConfigured()) G.loadGis().catch((e) => toast(e.message, { error: true }));

@@ -1,5 +1,5 @@
-// Textos de la interfaz en español e inglés. El idioma se elige en Ajustes (o en la portada) y se
-// recuerda en este dispositivo; la primera vez se usa el del navegador.
+// UI strings in Spanish and English. The language is picked in Settings (or on the landing page) and
+// remembered on this device; the first time, the browser's language is used.
 
 const KEY = 'gt:lang';
 const plural = (one, many) => ({ n }) => (Number(n) === 1 ? one : many).replace('{n}', n);
@@ -93,9 +93,9 @@ const es = {
 
   'ch.new': 'Nuevo reto', 'ch.emptyTitle': 'Todavía no hay retos', 'ch.emptyText': 'Propón uno al grupo: asistencia, volumen o mejora en un ejercicio.',
   'ch.startsOn': 'Empieza el {date}', 'ch.finished': 'Terminado', 'ch.lastDay': 'Último día', 'ch.daysLeft': plural('Queda {n} día', 'Quedan {n} días'),
-  'ch.asistencia': 'Asistencia', 'ch.volumen': 'Volumen', 'ch.mejora': 'Mejora',
-  'ch.asistencia.help': 'Gana quien vaya más días.', 'ch.volumen.help': 'Gana quien levante más kilos en total (series × reps × kg).',
-  'ch.mejora.help': 'Gana quien más suba su 1RM estimado respecto a su primer día del reto.',
+  'ch.attendance': 'Asistencia', 'ch.volume': 'Volumen', 'ch.improvement': 'Mejora',
+  'ch.attendance.help': 'Gana quien vaya más días.', 'ch.volume.help': 'Gana quien levante más kilos en total (series × reps × kg).',
+  'ch.improvement.help': 'Gana quien más suba su 1RM estimado respecto a su primer día del reto.',
   'ch.by': 'propuesto por {name}', 'ch.winner': 'Ha ganado <strong>{name}</strong>',
   'ch.titleLabel': 'Título', 'ch.titlePlaceholder': 'p. ej. Noviembre sin fallar', 'ch.type': 'Tipo', 'ch.exercise': 'Ejercicio (para volumen o mejora)',
   'ch.allExercises': 'Todos los ejercicios', 'ch.start': 'Empieza', 'ch.end': 'Termina', 'ch.create': 'Crear reto',
@@ -228,9 +228,9 @@ const en = {
 
   'ch.new': 'New challenge', 'ch.emptyTitle': 'No challenges yet', 'ch.emptyText': 'Propose one to the group: attendance, volume or improvement on an exercise.',
   'ch.startsOn': 'Starts {date}', 'ch.finished': 'Finished', 'ch.lastDay': 'Last day', 'ch.daysLeft': plural('{n} day left', '{n} days left'),
-  'ch.asistencia': 'Attendance', 'ch.volumen': 'Volume', 'ch.mejora': 'Improvement',
-  'ch.asistencia.help': 'Whoever trains on the most days wins.', 'ch.volumen.help': 'Whoever lifts the most total kilos wins (sets × reps × kg).',
-  'ch.mejora.help': 'Whoever raises their estimated 1RM the most from their first day of the challenge wins.',
+  'ch.attendance': 'Attendance', 'ch.volume': 'Volume', 'ch.improvement': 'Improvement',
+  'ch.attendance.help': 'Whoever trains on the most days wins.', 'ch.volume.help': 'Whoever lifts the most total kilos wins (sets × reps × kg).',
+  'ch.improvement.help': 'Whoever raises their estimated 1RM the most from their first day of the challenge wins.',
   'ch.by': 'proposed by {name}', 'ch.winner': '<strong>{name}</strong> won',
   'ch.titleLabel': 'Title', 'ch.titlePlaceholder': 'e.g. No-miss November', 'ch.type': 'Type', 'ch.exercise': 'Exercise (for volume or improvement)',
   'ch.allExercises': 'All exercises', 'ch.start': 'Starts', 'ch.end': 'Ends', 'ch.create': 'Create challenge',
@@ -280,7 +280,7 @@ function initial() {
   try {
     const saved = localStorage.getItem(KEY);
     if (saved === 'es' || saved === 'en') return saved;
-  } catch { /* sin storage */ }
+  } catch { /* no storage */ }
   return (navigator.language || '').toLowerCase().startsWith('es') ? 'es' : 'en';
 }
 let lang = initial();
@@ -289,10 +289,10 @@ export const getLang = () => lang;
 export const locale = () => (lang === 'es' ? 'es-ES' : 'en-GB');
 export function setLang(l) {
   lang = l === 'en' ? 'en' : 'es';
-  try { localStorage.setItem(KEY, lang); } catch { /* sin storage */ }
+  try { localStorage.setItem(KEY, lang); } catch { /* no storage */ }
 }
 
-/** Texto traducido; {var} se sustituye por vars.var. Las variables con HTML deben venir ya escapadas. */
+/** Translated string; {var} is replaced with vars.var. Variables containing HTML must already be escaped. */
 export function t(key, vars = {}) {
   const v = DICT[lang][key] ?? DICT.es[key] ?? key;
   const s = typeof v === 'function' ? v(vars) : v;

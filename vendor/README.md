@@ -1,24 +1,24 @@
 # vendor
 
-Dependencias de terceros servidas desde el propio repo, sin CDN.
+Third-party dependencies served from this repo, with no CDN.
 
 ## chart.umd.min.js
 
-Chart.js 4.4.1, copia exacta de `https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js`.
+Chart.js 4.4.1, an exact copy of `https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js`.
 
-SHA-512 (coincide con el SRI publicado por cdnjs):
+SHA-512 (matches the SRI published by cdnjs):
 
 ```
 CQBWl4fJHWbryGE+Pc7UAxWMUMNMWzWxF4SQo9CgkJIN1kx6djDQZjh3Y8SZ1d+6I+1zze6Z7kHXO7q3UyZAWw==
 ```
 
-Comprobar:
+To verify:
 
 ```sh
 openssl dgst -sha512 -binary vendor/chart.umd.min.js | openssl base64 -A
 ```
 
-Licencia MIT:
+MIT license:
 
 > The MIT License (MIT)
 >

@@ -1,93 +1,94 @@
-// Biblioteca de ejercicios por grupo muscular, en español e inglés.
-// En la hoja se guarda siempre el nombre en español de la biblioteca (o el nombre tal cual si es propio),
-// así un grupo con gente en distintos idiomas comparte los mismos datos.
+// Exercise library by muscle group, in English and Spanish.
+// The sheet always stores the library's English name (or the name as typed for custom exercises),
+// so a group whose members use different languages shares the same data.
 import { getLang } from './i18n.js';
 
 export const CATEGORIES = [
-  { id: 'pecho', es: 'Pecho', en: 'Chest', color: '#EB5757' },
-  { id: 'espalda', es: 'Espalda', en: 'Back', color: '#5B8DEF' },
-  { id: 'piernas', es: 'Piernas', en: 'Legs', color: '#27AE60' },
-  { id: 'hombros', es: 'Hombros', en: 'Shoulders', color: '#F2994A' },
-  { id: 'brazos', es: 'Brazos', en: 'Arms', color: '#9B51E0' },
-  { id: 'core', es: 'Core', en: 'Core', color: '#2DCCD3' },
-  { id: 'cardio', es: 'Cardio', en: 'Cardio', color: '#F2C94C' },
-  { id: 'otros', es: 'Otros', en: 'Other', color: '#8A8A93' },
+  { id: 'chest', en: 'Chest', es: 'Pecho', color: '#EB5757' },
+  { id: 'back', en: 'Back', es: 'Espalda', color: '#5B8DEF' },
+  { id: 'legs', en: 'Legs', es: 'Piernas', color: '#27AE60' },
+  { id: 'shoulders', en: 'Shoulders', es: 'Hombros', color: '#F2994A' },
+  { id: 'arms', en: 'Arms', es: 'Brazos', color: '#9B51E0' },
+  { id: 'core', en: 'Core', es: 'Core', color: '#2DCCD3' },
+  { id: 'cardio', en: 'Cardio', es: 'Cardio', color: '#F2C94C' },
+  { id: 'other', en: 'Other', es: 'Otros', color: '#8A8A93' },
 ];
-export const catLabel = (c) => c[getLang()] || c.es;
+export const catLabel = (c) => c[getLang()] || c.en;
 
-// [es, en, peso corporal]
+// [English (stored id), Spanish, bodyweight]
 const LIBRARY = {
-  pecho: [['Press banca', 'Bench press'], ['Press banca inclinado', 'Incline bench press'], ['Press banca declinado', 'Decline bench press'],
-    ['Press con mancuernas', 'Dumbbell bench press'], ['Press inclinado con mancuernas', 'Incline dumbbell press'],
-    ['Aperturas con mancuernas', 'Dumbbell fly'], ['Cruces en polea', 'Cable crossover'], ['Press en máquina', 'Machine chest press'],
-    ['Contractora (pec deck)', 'Pec deck'], ['Fondos', 'Dips', 1], ['Flexiones', 'Push-ups', 1]],
-  espalda: [['Dominadas', 'Pull-ups', 1], ['Dominadas lastradas', 'Weighted pull-ups', 1], ['Jalón al pecho', 'Lat pulldown'],
-    ['Remo con barra', 'Barbell row'], ['Remo con mancuerna', 'Dumbbell row'], ['Remo en polea', 'Seated cable row'],
-    ['Remo en máquina', 'Machine row'], ['Peso muerto', 'Deadlift'], ['Pullover en polea', 'Cable pullover'],
-    ['Hiperextensiones', 'Back extensions', 1]],
-  piernas: [['Sentadilla', 'Squat'], ['Sentadilla frontal', 'Front squat'], ['Sentadilla búlgara', 'Bulgarian split squat'],
-    ['Sentadilla goblet', 'Goblet squat'], ['Prensa', 'Leg press'], ['Peso muerto rumano', 'Romanian deadlift'], ['Zancadas', 'Lunges'],
-    ['Extensión de cuádriceps', 'Leg extension'], ['Curl femoral', 'Leg curl'], ['Hip thrust', 'Hip thrust'],
-    ['Elevación de gemelos', 'Calf raise'], ['Abductores en máquina', 'Hip abduction machine']],
-  hombros: [['Press militar', 'Overhead press'], ['Press de hombros con mancuernas', 'Dumbbell shoulder press'],
-    ['Elevaciones laterales', 'Lateral raise'], ['Pájaros', 'Rear delt fly'], ['Face pull', 'Face pull'], ['Encogimientos', 'Shrugs'],
-    ['Remo al mentón', 'Upright row']],
-  brazos: [['Curl bíceps', 'Barbell curl'], ['Curl con mancuernas', 'Dumbbell curl'], ['Curl martillo', 'Hammer curl'],
-    ['Curl en polea', 'Cable curl'], ['Curl predicador', 'Preacher curl'], ['Extensión de tríceps en polea', 'Triceps pushdown'],
-    ['Press francés', 'Skull crusher'], ['Extensión de tríceps sobre la cabeza', 'Overhead triceps extension'],
-    ['Fondos en banco', 'Bench dips', 1]],
-  core: [['Crunch', 'Crunch', 1], ['Elevación de piernas', 'Leg raise', 1], ['Rueda abdominal', 'Ab wheel rollout', 1],
-    ['Crunch en polea', 'Cable crunch'], ['Russian twist', 'Russian twist'], ['Pallof press', 'Pallof press']],
+  chest: [['Bench press', 'Press banca'], ['Incline bench press', 'Press banca inclinado'], ['Decline bench press', 'Press banca declinado'],
+    ['Dumbbell bench press', 'Press con mancuernas'], ['Incline dumbbell press', 'Press inclinado con mancuernas'],
+    ['Dumbbell fly', 'Aperturas con mancuernas'], ['Cable crossover', 'Cruces en polea'], ['Machine chest press', 'Press en máquina'],
+    ['Pec deck', 'Contractora (pec deck)'], ['Dips', 'Fondos', 1], ['Push-ups', 'Flexiones', 1]],
+  back: [['Pull-ups', 'Dominadas', 1], ['Weighted pull-ups', 'Dominadas lastradas', 1], ['Lat pulldown', 'Jalón al pecho'],
+    ['Barbell row', 'Remo con barra'], ['Dumbbell row', 'Remo con mancuerna'], ['Seated cable row', 'Remo en polea'],
+    ['Machine row', 'Remo en máquina'], ['Deadlift', 'Peso muerto'], ['Cable pullover', 'Pullover en polea'],
+    ['Back extensions', 'Hiperextensiones', 1]],
+  legs: [['Squat', 'Sentadilla'], ['Front squat', 'Sentadilla frontal'], ['Bulgarian split squat', 'Sentadilla búlgara'],
+    ['Goblet squat', 'Sentadilla goblet'], ['Leg press', 'Prensa'], ['Romanian deadlift', 'Peso muerto rumano'], ['Lunges', 'Zancadas'],
+    ['Leg extension', 'Extensión de cuádriceps'], ['Leg curl', 'Curl femoral'], ['Hip thrust', 'Hip thrust'],
+    ['Calf raise', 'Elevación de gemelos'], ['Hip abduction machine', 'Abductores en máquina']],
+  shoulders: [['Overhead press', 'Press militar'], ['Dumbbell shoulder press', 'Press de hombros con mancuernas'],
+    ['Lateral raise', 'Elevaciones laterales'], ['Rear delt fly', 'Pájaros'], ['Face pull', 'Face pull'], ['Shrugs', 'Encogimientos'],
+    ['Upright row', 'Remo al mentón']],
+  arms: [['Barbell curl', 'Curl bíceps'], ['Dumbbell curl', 'Curl con mancuernas'], ['Hammer curl', 'Curl martillo'],
+    ['Cable curl', 'Curl en polea'], ['Preacher curl', 'Curl predicador'], ['Triceps pushdown', 'Extensión de tríceps en polea'],
+    ['Skull crusher', 'Press francés'], ['Overhead triceps extension', 'Extensión de tríceps sobre la cabeza'],
+    ['Bench dips', 'Fondos en banco', 1]],
+  core: [['Crunch', 'Crunch', 1], ['Leg raise', 'Elevación de piernas', 1], ['Ab wheel rollout', 'Rueda abdominal', 1],
+    ['Cable crunch', 'Crunch en polea'], ['Russian twist', 'Russian twist'], ['Pallof press', 'Pallof press']],
   cardio: [],
 };
 
-const key = (s) => String(s).toLocaleLowerCase('es').trim();
+const key = (s) => String(s).toLocaleLowerCase('en').trim();
+/** Lowercase, accent-free form for search and duplicate checks. */
 export const norm = (s) => key(s).normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 const INDEX = new Map();
 for (const [cat, list] of Object.entries(LIBRARY)) {
-  for (const [es, en, bw] of list) INDEX.set(key(es), { name: es, en, cat, bw: Boolean(bw), custom: false });
+  for (const [en, es, bw] of list) INDEX.set(key(en), { name: en, es, cat, bw: Boolean(bw), custom: false });
 }
 
-let custom = new Map(); // ejercicios propios del grupo abierto
+let custom = new Map(); // custom exercises of the open group
 
-/** Ejercicios creados por el grupo (pestaña _ejercicios). Se llama al abrir cada grupo. */
+/** The group's custom exercises (_exercises tab). Called whenever a group is opened. */
 export function setCustomExercises(list) {
   custom = new Map();
   for (const c of list) {
     const k = key(c.name);
     if (!k || INDEX.has(k)) continue;
-    custom.set(k, { name: c.name.trim(), en: '', cat: CATEGORIES.some((x) => x.id === c.cat) ? c.cat : 'otros', bw: false, custom: true });
+    custom.set(k, { name: c.name.trim(), es: '', cat: CATEGORIES.some((x) => x.id === c.cat) ? c.cat : 'other', bw: false, custom: true });
   }
 }
 
 export function exerciseInfo(name) {
   const k = key(name);
-  return INDEX.get(k) || custom.get(k) || { name, en: '', cat: 'otros', bw: false, custom: true };
+  return INDEX.get(k) || custom.get(k) || { name, es: '', cat: 'other', bw: false, custom: true };
 }
 export const categoryOf = (name) => CATEGORIES.find((c) => c.id === exerciseInfo(name).cat);
 
-/** Nombre para mostrar en el idioma actual. */
+/** Display name in the current language. */
 export function exName(name) {
   const info = exerciseInfo(name);
-  return getLang() === 'en' && info.en ? info.en : info.name;
+  return getLang() === 'es' && info.es ? info.es : info.name;
 }
 
-/** Biblioteca + propios del grupo + nombres que aparezcan en los registros. */
+/** Library + the group's custom exercises + any other names found in the logs. */
 export function allExercises(usedNames = []) {
   const out = new Map([...INDEX, ...custom]);
   for (const n of usedNames) {
     const k = key(n);
-    if (k && !out.has(k)) out.set(k, { name: n, en: '', cat: 'otros', bw: false, custom: true });
+    if (k && !out.has(k)) out.set(k, { name: n, es: '', cat: 'other', bw: false, custom: true });
   }
   return [...out.values()];
 }
 
-/** ¿Coincide con la búsqueda en cualquiera de los dos idiomas? */
-export const matches = (e, q) => !q || norm(e.name).includes(q) || (e.en && norm(e.en).includes(q));
+/** Does it match the search in either language? */
+export const matches = (e, q) => !q || norm(e.name).includes(q) || (e.es && norm(e.es).includes(q));
 
-/** ¿Ya existe un ejercicio con este nombre (en cualquier idioma)? Devuelve el nombre canónico. */
+/** Is there already an exercise with this name (in either language)? Returns its stored name. */
 export function findExisting(name, usedNames = []) {
   const q = norm(name);
-  return allExercises(usedNames).find((e) => norm(e.name) === q || (e.en && norm(e.en) === q))?.name || null;
+  return allExercises(usedNames).find((e) => norm(e.name) === q || (e.es && norm(e.es) === q))?.name || null;
 }

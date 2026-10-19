@@ -1,5 +1,5 @@
-// Temporizador de descanso. Vive fuera del repintado de la app: guarda la hora de fin, así que sigue
-// siendo exacto aunque cambies de pantalla o el navegador ralentice la pestaña en segundo plano.
+// Rest timer. Lives outside the app's re-renders and stores the end time, so it stays accurate when
+// switching screens or when the browser throttles a background tab.
 import { t } from './i18n.js';
 import { icon } from './icons.js';
 
@@ -29,7 +29,7 @@ function beep() {
       o.start(ctx.currentTime + d);
       o.stop(ctx.currentTime + d + 0.2);
     });
-  } catch { /* sin audio */ }
+  } catch { /* no audio */ }
 }
 
 async function keepAwake(on) {
@@ -39,8 +39,8 @@ async function keepAwake(on) {
   } catch { wakeLock = null; }
 }
 
-// La barra se monta una vez y luego solo se actualizan el tiempo y el progreso: si se rehiciera el HTML
-// en cada tic, un toque en −15/+15 se podría perder a medio clic.
+// The bar is built once and then only the time and progress are updated: rebuilding the HTML on every
+// tick could swallow a tap on −15/+15 mid-click.
 function build() {
   $bar.className = 'restbar show';
   $bar.innerHTML = `<div class="restbar-fill"></div>
@@ -76,7 +76,7 @@ function finish() {
   doneTimer = setTimeout(stop, 6000);
 }
 
-/** Arranca (o reinicia) el descanso. Llamar desde un clic para que el navegador permita el sonido. */
+/** Starts (or restarts) the rest. Call it from a click so the browser allows sound. */
 export function start(seconds) {
   try {
     audio ||= new (window.AudioContext || window.webkitAudioContext)();
@@ -92,7 +92,7 @@ export function start(seconds) {
   paint();
 }
 
-/** Repinta los textos tras cambiar de idioma. */
+/** Repaints labels after a language change. */
 export function relabel() { if (isRunning()) { build(); paint(); } }
 
 export function add(seconds) {
@@ -117,7 +117,7 @@ $bar.addEventListener('click', (e) => {
   if (b.dataset.timer === 'stop') stop();
   else add(Number(b.dataset.timer));
 });
-// Al volver a la pestaña, el wake lock se pierde: se recupera si el descanso sigue en marcha.
+// The wake lock is lost when leaving the tab: take it again if the rest is still running.
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && isRunning()) { wakeLock = null; keepAwake(true); }
 });
