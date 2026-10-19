@@ -242,6 +242,12 @@ form { display: grid; gap: 16px; }
 .nav-item.on { color: var(--text); }
 .nav-item.on .ic { background: var(--accent); color: var(--accent-ink); }
 
+/* Installed app (Android 15+): the gesture bar is see-through but shows the manifest's background_color,
+   not the page. The bottom nav uses that same light colour, opaque, so both read as one surface. */
+@media (display-mode: standalone) and (max-width: 959px) {
+  .nav { background: var(--bg); backdrop-filter: none; -webkit-backdrop-filter: none; }
+}
+
 @media (min-width: 960px) {
   .shell.has-nav { display: grid; grid-template-columns: 232px minmax(0, 1fr); }
   .has-nav .nav {
