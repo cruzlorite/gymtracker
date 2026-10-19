@@ -1,0 +1,123 @@
+// Temporizador de descanso. Vive fuera del repintado de la app: guarda la hora de fin, así que sigue
+// siendo exacto aunque cambies de pantalla o el navegador ralentice la pestaña en segundo plano.
+import { t } from './i18n.js';
+import { icon } from './icons.js';
+
+const $bar = document.getElementById('restbar');
+let end = 0;
+let total = 0;
+let tick = null;
+let doneTimer = null;
+let audio = null;
+let wakeLock = null;
+
+const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+export const isRunning = () => end > Date.now();
+
+function beep() {
+  try {
+    const ctx = audio;
+    if (!ctx) return;
+    [0, 0.25, 0.5].forEach((d, i) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.frequency.value = i === 2 ? 1320 : 880;
+      g.gain.setValueAtTime(0.0001, ctx.currentTime + d);
+      g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + d + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + d + 0.18);
+      o.connect(g).connect(ctx.destination);
+      o.start(ctx.currentTime + d);
+      o.stop(ctx.currentTime + d + 0.2);
+    });
+  } catch { /* sin audio */ }
+}
+
+async function keepAwake(on) {
+  try {
+    if (on && !wakeLock && navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen');
+    if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+  } catch { wakeLock = null; }
+}
+
+// La barra se monta una vez y luego solo se actualizan el tiempo y el progreso: si se rehiciera el HTML
+// en cada tic, un toque en −15/+15 se podría perder a medio clic.
+function build() {
+  $bar.className = 'restbar show';
+  $bar.innerHTML = `<div class="restbar-fill"></div>
+    <div class="restbar-row">
+      <span class="restbar-label">${icon('timer')} ${t('timer.rest')}</span>
+      <strong class="restbar-time" aria-live="off"></strong>
+      <span class="restbar-actions">
+        <button class="chip-btn" data-timer="-15" aria-label="${t('timer.minus')}">−15</button>
+        <button class="chip-btn" data-timer="15" aria-label="${t('timer.plus')}">+15</button>
+        <button class="icon-btn" data-timer="stop" aria-label="${t('timer.skip')}">${icon('x')}</button>
+      </span>
+    </div>`;
+}
+
+function paint() {
+  const left = Math.max(0, Math.ceil((end - Date.now()) / 1000));
+  if (left <= 0) return finish();
+  if (!$bar.querySelector('.restbar-time')) build();
+  $bar.querySelector('.restbar-time').textContent = fmt(left);
+  $bar.querySelector('.restbar-fill').style.width = `${total ? (1 - left / total) * 100 : 0}%`;
+}
+
+function finish() {
+  clearInterval(tick); tick = null;
+  end = 0;
+  keepAwake(false);
+  beep();
+  navigator.vibrate?.([250, 120, 250]);
+  $bar.className = 'restbar show done';
+  $bar.innerHTML = `<div class="restbar-row"><span class="restbar-label">${icon('check')} ${t('timer.done')}</span>
+    <button class="icon-btn" data-timer="stop" aria-label="${t('common.close')}">${icon('x')}</button></div>`;
+  clearTimeout(doneTimer);
+  doneTimer = setTimeout(stop, 6000);
+}
+
+/** Arranca (o reinicia) el descanso. Llamar desde un clic para que el navegador permita el sonido. */
+export function start(seconds) {
+  try {
+    audio ||= new (window.AudioContext || window.webkitAudioContext)();
+    audio.resume?.();
+  } catch { audio = null; }
+  clearTimeout(doneTimer);
+  total = seconds;
+  end = Date.now() + seconds * 1000;
+  keepAwake(true);
+  clearInterval(tick);
+  build();
+  tick = setInterval(paint, 250);
+  paint();
+}
+
+/** Repinta los textos tras cambiar de idioma. */
+export function relabel() { if (isRunning()) { build(); paint(); } }
+
+export function add(seconds) {
+  if (!isRunning()) return;
+  end = Math.max(Date.now() + 1000, end + seconds * 1000);
+  total = Math.max(total + seconds, 1);
+  paint();
+}
+
+export function stop() {
+  clearInterval(tick); tick = null;
+  clearTimeout(doneTimer);
+  end = 0;
+  keepAwake(false);
+  $bar.className = 'restbar';
+  $bar.innerHTML = '';
+}
+
+$bar.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-timer]');
+  if (!b) return;
+  if (b.dataset.timer === 'stop') stop();
+  else add(Number(b.dataset.timer));
+});
+// Al volver a la pestaña, el wake lock se pierde: se recupera si el descanso sigue en marcha.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && isRunning()) { wakeLock = null; keepAwake(true); }
+});

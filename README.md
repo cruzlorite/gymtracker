@@ -1,6 +1,18 @@
 # GymTracker
 
-Apunta tus entrenos, compite con tus amigos y descubre quién va más y quién mejora más.
+Apunta tus entrenos serie a serie, descansa con el temporizador y compite con tus amigos para ver quién va más y quién mejora más. En español e inglés.
+
+**Web:** <https://cruzlorite.github.io/gymtracker/>
+
+## Qué hace
+
+- **Registro serie a serie**: botones grandes de − y + para el peso y las repeticiones, rellenados con tu última sesión. Cada serie se guarda con un toque. Puedes editar o borrar una serie tocándola.
+- **Temporizador de descanso**: arranca solo al guardar una serie y avisa con sonido y vibración. Mantiene la pantalla encendida mientras cuenta.
+- **Biblioteca de ejercicios** por grupo muscular, con búsqueda en los dos idiomas y una sección de recientes. Cada grupo puede crear sus propios ejercicios.
+- **Récords personales** marcados con un trofeo al momento, e historial por ejercicio.
+- **Grupo**: ranking de asistencia, mejora, rachas y volumen; retos; perfiles; calendario compartido; gráficas de progreso del 1RM estimado.
+- **Sin perder series**: cada serie se ve al instante y se sube a la hoja en segundo plano. Si no hay conexión o caduca la sesión de Google, queda guardada en el dispositivo y se sube al recuperarla.
+- **Instalable** en la pantalla de inicio del móvil (manifest de PWA). Tema claro y oscuro.
 
 Es una app **solo frontend**: HTML, CSS y JavaScript sin build ni servidor. Se publica como web estática en GitHub Pages y los datos viven en **Google Sheets**, en el Drive de quien crea cada grupo.
 
@@ -15,23 +27,32 @@ Es una app **solo frontend**: HTML, CSS y JavaScript sin build ni servidor. Se p
   | `_grupo` | Versión del esquema y marca de la app (protegida: solo la edita quien crea el grupo) |
   | `_miembros` | `email, nombre, foto, alta` |
   | `_retos` | `id, titulo, tipo, ejercicio, inicio, fin, creado_por` |
-  | `<email>` (una por persona) | `id, fecha, ejercicio, series, reps, kg, notas`. Está protegida para que solo la edite su dueño |
+  | `_ejercicios` | Ejercicios propios del grupo: `nombre, categoria, creado_por`. Los grupos antiguos la crean la primera vez que alguien añade uno |
+  | `<email>` (una por persona) | `id, fecha, ejercicio, series, reps, kg, notas`, con una fila por serie (`series` = 1). Una fila sin ejercicio es un día de asistencia. Está protegida para que solo la edite su dueño |
 
 - **Invitar**: solo puede hacerlo quien crea el grupo. La app comparte la hoja desde su Drive (rol *editor*) y Google envía un correo con el enlace `?group=<id>`. La primera vez, el invitado elige la hoja en el Picker para que la app tenga acceso a ella. Los demás miembros no pueden volver a compartirla (`writersCanShare: false`).
-- **Modo demo**: botón *Probar con datos de ejemplo*, con datos inventados en memoria. Funciona sin configurar nada.
+- **Idioma de los datos**: la hoja guarda los ejercicios de la biblioteca con su nombre en español; la app los traduce al mostrarlos. Así, en un mismo grupo puede haber gente usando la app en cada idioma.
+- **Modo demo**: botón *Probar la demo*, con datos inventados en memoria. Funciona sin configurar nada.
 
 ## Estructura
 
 ```
-index.html        página única
-privacy.html      política de privacidad (enlazada desde la app y la pantalla de consentimiento)
-styles.css        estilos (modo claro y oscuro)
-config.js         IDs públicos de Google Cloud
-js/app.js         estado, vistas y acciones
-js/google.js      login, Drive, Sheets y Picker (SheetStore)
-js/demo.js        DemoStore: misma interfaz que SheetStore, en memoria
-js/stats.js       cálculos puros (asistencia, volumen, 1RM, rachas, retos)
-vendor/           Chart.js servido desde el repo (hash verificado en vendor/README.md)
+index.html            página única
+privacy.html          política de privacidad en los dos idiomas (enlazada desde la app y la pantalla de consentimiento)
+manifest.webmanifest  instalación en la pantalla de inicio
+icons/                icono de la app (SVG y PNG)
+styles.css            estilos (tema claro y oscuro, móvil y escritorio)
+config.js             IDs públicos de Google Cloud
+js/app.js             estado, vistas y acciones
+js/i18n.js            textos en español e inglés
+js/exercises.js       biblioteca de ejercicios por grupo muscular (ES/EN) y ejercicios propios
+js/outbox.js          cola de cambios pendientes de subir (guardada en el navegador)
+js/timer.js           temporizador de descanso
+js/icons.js           iconos SVG
+js/google.js          login, Drive, Sheets y Picker (SheetStore)
+js/demo.js            DemoStore: misma interfaz que SheetStore, en memoria
+js/stats.js           cálculos puros (asistencia, volumen, 1RM, rachas, récords, retos)
+vendor/               Chart.js servido desde el repo (hash verificado en vendor/README.md)
 ```
 
 ## Configurar Google
@@ -108,7 +129,7 @@ Las rutas son relativas, así que funciona igual en un subdirectorio (`/<repo>/`
 
 - Todos los miembros de un grupo ven y pueden descargar la hoja entera (emails y entrenos de todos).
 - El creador del grupo es dueño de la hoja: puede editar o borrar cualquier dato.
-- `_miembros` y `_retos` las puede editar cualquier miembro. Por ejemplo, alguien podría cambiar el nombre visible de otro o borrar retos. Sheets guarda un historial de versiones para recuperar cambios.
+- `_miembros`, `_retos` y `_ejercicios` las puede editar cualquier miembro. Por ejemplo, alguien podría cambiar el nombre visible de otro o borrar retos. Sheets guarda un historial de versiones para recuperar cambios.
 - Cada uno apunta lo que quiere en su pestaña: hacer trampas es trivial.
 - El nombre y el email de soporte del proyecto de Cloud aparecen en la pantalla de login.
 - Si se borra el proyecto de Cloud o Google cambia sus APIs, el login deja de funcionar. Los datos siguen en las hojas.

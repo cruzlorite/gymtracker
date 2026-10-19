@@ -1,6 +1,7 @@
 // Todo lo que habla con Google: login, Drive, Sheets y el selector de archivos (Picker).
 // No hay servidor: el navegador usa el token del propio usuario contra las APIs de Google.
 import { CONFIG } from '../config.js';
+import { t } from './i18n.js';
 import { isISODate, todayISO, toISO } from './stats.js';
 
 const SCOPE_FILE = 'https://www.googleapis.com/auth/drive.file';
@@ -8,18 +9,20 @@ const SCOPES = `${SCOPE_FILE} openid email profile`;
 const SHEETS = 'https://sheets.googleapis.com/v4/spreadsheets';
 const DRIVE = 'https://www.googleapis.com/drive/v3/files';
 
+// El formato de la hoja no depende del idioma de la app: los nombres de pestañas y columnas son fijos.
 export const TITLE_PREFIX = 'GymTracker · ';
-export const TAB = { group: '_grupo', members: '_miembros', challenges: '_retos' };
+export const TAB = { group: '_grupo', members: '_miembros', challenges: '_retos', exercises: '_ejercicios' };
 const HEADERS = {
   group: ['clave', 'valor'],
   members: ['email', 'nombre', 'foto', 'alta'],
   challenges: ['id', 'titulo', 'tipo', 'ejercicio', 'inicio', 'fin', 'creado_por'],
+  exercises: ['nombre', 'categoria', 'creado_por'],
   entries: ['id', 'fecha', 'ejercicio', 'series', 'reps', 'kg', 'notas'],
 };
 const SCHEMA_VERSION = 1;
 
 export class AuthError extends Error {
-  constructor() { super('Tu sesión de Google ha caducado.'); this.name = 'AuthError'; }
+  constructor() { super(t('err.session')); this.name = 'AuthError'; }
 }
 
 export const isConfigured = () => Boolean(CONFIG.CLIENT_ID);
@@ -32,7 +35,7 @@ function loadScript(src) {
     const s = document.createElement('script');
     s.src = src; s.async = true;
     s.onload = () => resolve();
-    s.onerror = () => { delete scripts[src]; reject(new Error('No se pudo cargar un script de Google. ¿Hay conexión?')); };
+    s.onerror = () => { delete scripts[src]; reject(new Error(t('err.script'))); };
     document.head.appendChild(s);
   }));
 }
@@ -48,12 +51,13 @@ const HINT_KEY = 'gt:hint';
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const lsSet = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch { /* sin storage */ } };
 export const savedHint = () => lsGet(HINT_KEY) || '';
+export const tokenValid = () => Boolean(token) && Date.now() < tokenExp;
 
-/** Abre el popup de Google. Hay que llamarla directamente desde un clic. */
+/** Abre el popup de Google. Hay que llamarla directamente desde un clic, antes de cualquier await. */
 export function signIn() {
   return new Promise((resolve, reject) => {
     const oauth = window.google?.accounts?.oauth2;
-    if (!oauth) return reject(new Error('El login de Google aún está cargando. Prueba de nuevo en un segundo.'));
+    if (!oauth) return reject(new Error(t('err.gisLoading')));
     const client = oauth.initTokenClient({
       client_id: CONFIG.CLIENT_ID,
       scope: SCOPES,
@@ -63,8 +67,7 @@ export function signIn() {
           // Google muestra los permisos como casillas y la de Drive viene sin marcar: al reintentar,
           // forzamos la pantalla de permisos para que vuelva a aparecer.
           forceConsent = true;
-          return reject(new Error('Falta el permiso de Google Drive. Vuelve a entrar y, en la ventana de Google, marca la casilla '
-            + '«Ver, editar, crear y eliminar solo los archivos específicos de Google Drive que uses con esta aplicación».'));
+          return reject(new Error(t('err.drivePerm')));
         }
         forceConsent = false;
         token = r.access_token;
@@ -72,9 +75,9 @@ export function signIn() {
         resolve();
       },
       error_callback: (e) => reject(new Error(
-        e?.type === 'popup_closed' ? 'Has cerrado la ventana de Google.'
-          : e?.type === 'popup_failed_to_open' ? 'El navegador ha bloqueado la ventana de Google. Permite las ventanas emergentes.'
-            : 'No se pudo iniciar sesión con Google.')),
+        e?.type === 'popup_closed' ? t('err.popupClosed')
+          : e?.type === 'popup_failed_to_open' ? t('err.popupBlocked')
+            : t('err.signin'))),
     });
     const hint = savedHint();
     const prompt = forceConsent ? 'consent' : '';
@@ -88,7 +91,7 @@ export function signOut() {
 }
 
 async function api(url, { method = 'GET', body, query } = {}) {
-  if (!token || Date.now() > tokenExp) throw new AuthError();
+  if (!tokenValid()) throw new AuthError();
   const u = new URL(url);
   for (const [k, v] of Object.entries(query || {})) u.searchParams.set(k, v);
   const res = await fetch(u, {
@@ -100,7 +103,7 @@ async function api(url, { method = 'GET', body, query } = {}) {
   if (!res.ok) {
     let msg = '';
     try { msg = (await res.json()).error?.message || ''; } catch { /* sin cuerpo */ }
-    const err = new Error(msg || `Google respondió con un error (${res.status}).`);
+    const err = new Error(msg || t('err.google', { status: res.status }));
     err.status = res.status;
     throw err;
   }
@@ -127,7 +130,7 @@ export async function pickSheet(fileId) {
       .addView(view)
       .setOAuthToken(token)
       .setDeveloperKey(CONFIG.API_KEY)
-      .setTitle(fileId ? 'Selecciona la hoja del grupo para unirte' : 'Elige la hoja del grupo')
+      .setTitle(fileId ? t('picker.join') : t('picker.choose'))
       .setCallback((d) => {
         if (d.action === P.Action.PICKED) resolve(d.docs[0].id);
         else if (d.action === P.Action.CANCEL) resolve(null);
@@ -160,6 +163,7 @@ const num = (v) => {
   return Number.isFinite(n) ? n : 0;
 };
 const CH_TYPES = new Set(['asistencia', 'volumen', 'mejora']);
+const entryRow = (e) => [e.id, e.date, e.exercise, e.sets, e.reps, e.weight, e.notes || ''];
 
 /** Solo fotos de perfil de Google: una URL arbitraria en _miembros revelaría la IP de quien abre la app. */
 function safePicture(v) {
@@ -194,7 +198,10 @@ function tabOwnership(tab, ownerEmail) {
 export class SheetStore {
   kind = 'google';
 
-  constructor(me) { this.me = me; }
+  constructor(me) {
+    this.me = me;
+    this.meta = new Map(); // groupId → { myTab, hasExercises }
+  }
 
   async listGroups() {
     const q = `appProperties has { key='app' and value='${CONFIG.APP_TAG}' } and trashed=false`;
@@ -213,7 +220,7 @@ export class SheetStore {
       method: 'POST',
       body: {
         properties: { title: TITLE_PREFIX + name },
-        sheets: [TAB.group, TAB.members, TAB.challenges].map((title) => ({ properties: { title } })),
+        sheets: [TAB.group, TAB.members, TAB.challenges, TAB.exercises].map((title) => ({ properties: { title } })),
       },
     });
     const id = ss.spreadsheetId;
@@ -226,6 +233,7 @@ export class SheetStore {
           { range: `${TAB.group}!A1`, values: [HEADERS.group, ['version', SCHEMA_VERSION], ['app', CONFIG.APP_TAG]] },
           { range: `${TAB.members}!A1`, values: [HEADERS.members] },
           { range: `${TAB.challenges}!A1`, values: [HEADERS.challenges] },
+          { range: `${TAB.exercises}!A1`, values: [HEADERS.exercises] },
         ],
       },
     });
@@ -256,12 +264,12 @@ export class SheetStore {
   async join(id) {
     const me = this.me;
     const [{ tabs }, file] = await Promise.all([this.tabs(id), this.file(id)]);
-    if (!tabs.some((t) => t.title === TAB.members)) throw new Error('Esa hoja no es un grupo de GymTracker.');
-    const mine = tabs.find((t) => t.title.toLowerCase() === me.email);
+    if (!tabs.some((x) => x.title === TAB.members)) throw new Error(t('err.notGroup'));
+    const mine = tabs.find((x) => x.title.toLowerCase() === me.email);
     if (mine && tabOwnership(mine, file.owners?.[0]?.emailAddress?.toLowerCase()) !== true) {
       throw new Error(file.ownedByMe
-        ? `La pestaña «${mine.title}» no la ha creado esta app para ti. Bórrala desde la hoja y vuelve a unirte.`
-        : `Alguien ha creado una pestaña con tu email que no puedes controlar. Pide a ${file.owners?.[0]?.displayName || 'quien creó el grupo'} que la borre de la hoja y vuelve a intentarlo.`);
+        ? t('err.tabNotYoursOwner', { tab: mine.title })
+        : t('err.tabNotYours', { owner: file.owners?.[0]?.displayName || t('group.creator') }));
     }
     if (!mine) {
       const sheetId = 1 + Math.floor(Math.random() * 2e9);
@@ -293,20 +301,24 @@ export class SheetStore {
     }
     const userTabs = [];
     const suspicious = [];
-    for (const t of tabs) {
-      if (t.title.startsWith('_') || !t.title.includes('@')) continue;
-      const ok = tabOwnership(t, ownerEmail);
-      const mine = t.title.toLowerCase() === this.me.email;
-      (ok === false || (mine && ok !== true) ? suspicious : userTabs).push(t);
+    for (const tab of tabs) {
+      if (tab.title.startsWith('_') || !tab.title.includes('@')) continue;
+      const ok = tabOwnership(tab, ownerEmail);
+      const mine = tab.title.toLowerCase() === this.me.email;
+      (ok === false || (mine && ok !== true) ? suspicious : userTabs).push(tab);
     }
+    const hasExercises = tabs.some((x) => x.title === TAB.exercises);
+    this.meta.set(id, { myTab: userTabs.find((x) => x.title.toLowerCase() === this.me.email) || null, hasExercises });
+
     const params = new URLSearchParams({ valueRenderOption: 'UNFORMATTED_VALUE' });
-    [`${TAB.members}!A2:D`, `${TAB.challenges}!A2:G`, ...userTabs.map((t) => `${quote(t.title)}!A2:G`)]
+    [`${TAB.members}!A2:D`, `${TAB.challenges}!A2:G`, `${hasExercises ? TAB.exercises : TAB.members}!A2:C`,
+      ...userTabs.map((x) => `${quote(x.title)}!A2:G`)]
       .forEach((r) => params.append('ranges', r));
     const res = await api(`${SHEETS}/${id}/values:batchGet?${params}`);
-    const [memberRows, challengeRows, ...entryRows] = res.valueRanges.map((v) => v.values || []);
+    const [memberRows, challengeRows, exerciseRows, ...entryRows] = res.valueRanges.map((v) => v.values || []);
 
     // Solo cuenta como miembro quien tiene una pestaña válida: una fila suelta en _miembros no basta.
-    const tabEmails = new Set(userTabs.map((t) => t.title.toLowerCase()));
+    const tabEmails = new Set(userTabs.map((x) => x.title.toLowerCase()));
     const members = [];
     for (const r of memberRows) {
       const email = String(r[0] || '').trim().toLowerCase();
@@ -315,14 +327,17 @@ export class SheetStore {
       members.push({ email, name: String(r[1] || email), picture: safePicture(r[2]), joined: isISODate(joined) ? joined : '' });
     }
     const entries = [];
-    userTabs.forEach((t, i) => {
-      const email = t.title.toLowerCase();
+    userTabs.forEach((tab, i) => {
+      const email = tab.title.toLowerCase();
       if (!members.some((m) => m.email === email)) members.push({ email, name: email.split('@')[0], picture: '', joined: '' });
+      const seen = new Set(); // un reintento de red puede duplicar una fila: el id manda
       for (const r of entryRows[i]) {
         const date = normDate(r[1]);
-        if (!isISODate(date)) continue;
+        const entryId = String(r[0] || '');
+        if (!isISODate(date) || (entryId && seen.has(entryId))) continue;
+        seen.add(entryId);
         entries.push({
-          id: String(r[0] || ''), email, date, exercise: String(r[2] || '').trim(),
+          id: entryId, email, date, exercise: String(r[2] || '').trim(),
           sets: num(r[3]), reps: num(r[4]), weight: num(r[5]), notes: String(r[6] || ''),
         });
       }
@@ -332,32 +347,59 @@ export class SheetStore {
       id: String(r[0] || ''), title: String(r[1] || ''), type: String(r[2] || 'asistencia'), exercise: String(r[3] || ''),
       start: normDate(r[4]), end: normDate(r[5]), createdBy: String(r[6] || '').toLowerCase(),
     })).filter((c) => c.id && c.title && CH_TYPES.has(c.type) && isISODate(c.start) && isISODate(c.end) && c.start <= c.end);
+    const exercises = hasExercises
+      ? exerciseRows.filter((r) => String(r[0] || '').trim()).map((r) => ({ name: String(r[0]).trim().slice(0, 60), cat: String(r[1] || 'otros') }))
+      : [];
     return {
       id,
       name: title.startsWith(TITLE_PREFIX) ? title.slice(TITLE_PREFIX.length) : title,
       url: sheetUrl(id),
-      members, entries, challenges,
+      members, entries, challenges, exercises,
       isMember: tabEmails.has(this.me.email),
       canShare: Boolean(file.capabilities?.canShare),
       ownerName: file.owners?.[0]?.displayName || '',
-      suspicious: suspicious.map((t) => t.title),
+      suspicious: suspicious.map((x) => x.title),
     };
   }
 
+  async #myTab(id) {
+    if (!this.meta.get(id)?.myTab) await this.loadGroup(id);
+    const tab = this.meta.get(id)?.myTab;
+    if (!tab) throw new Error(t('err.noTab'));
+    return tab;
+  }
+
+  /**
+   * Filas (base 0, sin la cabecera) de un registro en mi pestaña. Normalmente una; más si un reintento
+   * de red duplicó el alta. Vacío si ya no está.
+   */
+  async #rowsOf(id, tab, entryId) {
+    const r = await api(`${SHEETS}/${id}/values/${enc(`${quote(tab.title)}!A:A`)}`);
+    return (r.values || []).flatMap((row, i) => (i > 0 && String(row[0]) === entryId ? [i] : []));
+  }
+
   addEntries(id, rows) {
-    return append(id, this.me.email, rows.map((e) => [e.id, e.date, e.exercise, e.sets, e.reps, e.weight, e.notes || '']));
+    return append(id, this.me.email, rows.map(entryRow));
+  }
+
+  async updateEntry(id, e) {
+    const tab = await this.#myTab(id);
+    const rows = await this.#rowsOf(id, tab, e.id);
+    if (!rows.length) return; // lo borraron desde la hoja: nada que actualizar
+    await api(`${SHEETS}/${id}/values:batchUpdate`, {
+      method: 'POST',
+      body: { valueInputOption: 'RAW', data: rows.map((i) => ({ range: `${quote(tab.title)}!A${i + 1}:G${i + 1}`, values: [entryRow(e)] })) },
+    });
   }
 
   async deleteEntry(id, entryId) {
-    const { tabs } = await this.tabs(id);
-    const tab = tabs.find((t) => t.title.toLowerCase() === this.me.email);
-    if (!tab) throw new Error('No encuentro tu pestaña en la hoja.');
-    const r = await api(`${SHEETS}/${id}/values/${enc(`${quote(tab.title)}!A:A`)}`);
-    const idx = (r.values || []).findIndex((row) => String(row[0]) === entryId);
-    if (idx < 1) throw new Error('Ese registro ya no existe en la hoja.');
+    const tab = await this.#myTab(id);
+    const rows = await this.#rowsOf(id, tab, entryId);
+    if (!rows.length) return; // ya no estaba: borrar es idempotente
+    // De abajo arriba, para que borrar una fila no desplace las siguientes.
     await api(`${SHEETS}/${id}:batchUpdate`, {
       method: 'POST',
-      body: { requests: [{ deleteDimension: { range: { sheetId: tab.sheetId, dimension: 'ROWS', startIndex: idx, endIndex: idx + 1 } } }] },
+      body: { requests: rows.reverse().map((i) => ({ deleteDimension: { range: { sheetId: tab.sheetId, dimension: 'ROWS', startIndex: i, endIndex: i + 1 } } })) },
     });
   }
 
@@ -365,11 +407,28 @@ export class SheetStore {
     return append(id, TAB.challenges, [[c.id, c.title, c.type, c.exercise || '', c.start, c.end, this.me.email]]);
   }
 
+  /** Ejercicio propio del grupo. Los grupos antiguos no tienen la pestaña: se crea la primera vez. */
+  async addExercise(id, ex) {
+    if (!this.meta.get(id)?.hasExercises) {
+      const { tabs } = await this.tabs(id);
+      if (!tabs.some((x) => x.title === TAB.exercises)) {
+        await api(`${SHEETS}/${id}:batchUpdate`, {
+          method: 'POST', body: { requests: [{ addSheet: { properties: { title: TAB.exercises } } }] },
+        });
+        await api(`${SHEETS}/${id}/values/${enc(`${TAB.exercises}!A1`)}`, {
+          method: 'PUT', query: { valueInputOption: 'RAW' }, body: { values: [HEADERS.exercises] },
+        });
+      }
+      this.meta.set(id, { ...this.meta.get(id), hasExercises: true });
+    }
+    await append(id, TAB.exercises, [[ex.name, ex.cat, this.me.email]]);
+  }
+
   /** Comparte la hoja desde el Drive del usuario. Google envía el email con el enlace de invitación. */
   invite(id, email, link) {
     return api(`${DRIVE}/${id}/permissions`, {
       method: 'POST',
-      query: { sendNotificationEmail: 'true', emailMessage: `¡Únete a nuestro grupo de GymTracker! Abre este enlace: ${link}` },
+      query: { sendNotificationEmail: 'true', emailMessage: t('invite.email', { link }) },
       body: { role: 'writer', type: 'user', emailAddress: email.trim() },
     });
   }

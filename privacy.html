@@ -3,57 +3,141 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Privacidad · GymTracker</title>
-  <meta name="description" content="Qué datos usa GymTracker y dónde se guardan.">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏋️</text></svg>">
+  <title>Privacidad · Privacy · GymTracker</title>
+  <meta name="description" content="Qué datos usa GymTracker y dónde se guardan. · What data GymTracker uses and where it is stored.">
+  <meta name="theme-color" content="#0B0B0D">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
   <style>
-    .legal { max-width: 720px; }
-    .legal h2 { margin: 1.6em 0 .4em; font-size: 1.15rem; }
-    .legal ul { padding-left: 1.2em; }
-    .legal li { margin: .3em 0; }
-    .legal a { color: var(--accent); }
+    .legal { max-width: 720px; margin: 0 auto; padding: calc(var(--safe-t) + 20px) 20px 64px; }
+    .legal-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 28px; }
+    .legal-top a { display: inline-flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none; }
+    .legal h1 { font-size: clamp(32px, 6vw, 44px); font-weight: 800; letter-spacing: -.035em; }
+    .legal h2 { margin: 32px 0 10px; font-size: 19px; }
+    .legal p, .legal li { color: var(--text); line-height: 1.6; }
+    .legal .updated { color: var(--muted); margin: 6px 0 22px; }
+    .legal ul { padding-left: 1.2em; margin: 0; }
+    .legal li { margin: 6px 0; }
+    .legal .seg button { min-width: 88px; }
+    [data-lang-block] { display: none; }
+    html[lang="es"] [data-lang-block="es"], html[lang="en"] [data-lang-block="en"] { display: block; }
   </style>
+  <script>
+    // Mismo idioma que la app (Ajustes) o, si no se ha elegido, el del navegador.
+    (function () {
+      var l = null;
+      try { l = localStorage.getItem('gt:lang'); } catch (e) { /* sin storage */ }
+      if (l !== 'es' && l !== 'en') l = (navigator.language || '').toLowerCase().indexOf('es') === 0 ? 'es' : 'en';
+      document.documentElement.lang = l;
+      try {
+        var p = JSON.parse(localStorage.getItem('gt:prefs') || '{}');
+        if (p.theme === 'light' || p.theme === 'dark') document.documentElement.dataset.theme = p.theme;
+      } catch (e) { /* nada */ }
+    })();
+  </script>
 </head>
 <body>
-  <main class="content legal">
-    <p><a href="./">← Volver a GymTracker</a></p>
-    <h1>Privacidad</h1>
-    <p class="muted">Última actualización: 19 de octubre de 2026</p>
+  <main class="legal">
+    <div class="legal-top">
+      <a href="./"><svg width="30" height="30" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="16" fill="#C8F04A"/><path d="M21 21v22M43 21v22M14 27v10M50 27v10M21 32h22" stroke="#0B0B0D" stroke-width="5.5" stroke-linecap="round" fill="none"/></svg><span class="wordmark">GymTracker</span></a>
+      <div class="seg" role="group" aria-label="Idioma · Language">
+        <button type="button" data-set-lang="es">Español</button>
+        <button type="button" data-set-lang="en">English</button>
+      </div>
+    </div>
 
-    <p>GymTracker es una página web estática, sin servidor propio. Quien la publica no recibe, ve ni guarda ninguno de tus datos: tu navegador habla directamente con Google y todo se guarda en hojas de cálculo de Google Drive.</p>
+    <article data-lang-block="es" lang="es">
+      <h1>Privacidad</h1>
+      <p class="updated">Última actualización: 19 de octubre de 2026</p>
+      <p>GymTracker es una página web estática, sin servidor propio. Quien la publica no recibe, ve ni guarda ninguno de tus datos: tu navegador habla directamente con Google y todo se guarda en hojas de cálculo de Google Drive.</p>
 
-    <h2>Qué permisos pide a tu cuenta de Google</h2>
-    <ul>
-      <li><strong>Tu nombre, email y foto de perfil</strong> (<code>openid</code>, <code>email</code>, <code>profile</code>): para identificarte dentro de tus grupos.</li>
-      <li><strong>Acceso a los archivos de Drive que uses con la app</strong> (<code>drive.file</code>): solo las hojas que crea la propia app o que eliges tú en el selector de Google. La app no puede ver el resto de tu Drive.</li>
-    </ul>
+      <h2>Qué permisos pide a tu cuenta de Google</h2>
+      <ul>
+        <li><strong>Tu nombre, email y foto de perfil</strong> (<code>openid</code>, <code>email</code>, <code>profile</code>): para identificarte dentro de tus grupos.</li>
+        <li><strong>Acceso a los archivos de Drive que uses con la app</strong> (<code>drive.file</code>): solo las hojas que crea la propia app o que eliges tú en el selector de Google. La app no puede ver el resto de tu Drive.</li>
+      </ul>
 
-    <h2>Qué datos se guardan y dónde</h2>
-    <ul>
-      <li>Cada grupo es una hoja de cálculo en el Google Drive de quien lo crea.</li>
-      <li>En ella se guardan tu email, tu nombre, la dirección de tu foto de perfil, la fecha en que te uniste, tus entrenos (fecha, ejercicio, series, repeticiones, kilos y notas) y los retos del grupo.</li>
-      <li>El token de acceso de Google se guarda solo en la memoria de la pestaña y desaparece al cerrarla. En el almacenamiento local del navegador quedan tu email (para agilizar el próximo login) y el último grupo que abriste. El email se borra al cerrar sesión, y ambos al limpiar los datos del sitio en el navegador.</li>
-    </ul>
+      <h2>Qué datos se guardan y dónde</h2>
+      <ul>
+        <li>Cada grupo es una hoja de cálculo en el Google Drive de quien lo crea.</li>
+        <li>En ella se guardan tu email, tu nombre, la dirección de tu foto de perfil, la fecha en que te uniste, tus series (fecha, ejercicio, repeticiones, kilos y notas), los retos y los ejercicios que cree el grupo.</li>
+        <li>El token de acceso de Google solo está en la memoria de la pestaña y desaparece al cerrarla.</li>
+        <li>En el almacenamiento local de tu navegador quedan: tu email (para agilizar el próximo login), el último grupo que abriste, tus preferencias (idioma, tema, temporizador e incremento de peso) y las series que aún no se han subido a la hoja, por ejemplo si no había conexión. Estas se borran solas en cuanto llegan a la hoja. El email se borra al cerrar sesión, y todo lo demás al limpiar los datos del sitio en el navegador.</li>
+      </ul>
 
-    <h2>Quién puede ver tus datos</h2>
-    <ul>
-      <li><strong>Todas las personas de tu grupo</strong> pueden ver y descargar la hoja completa, incluidos tu email y tus entrenos.</li>
-      <li>Tu pestaña está protegida para que solo la edites tú. <strong>Quien creó el grupo</strong>, como dueño de la hoja, puede editar o borrar cualquier dato e invitar a más gente.</li>
-      <li>Google trata los datos según su propia <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">política de privacidad</a>.</li>
-    </ul>
+      <h2>Quién puede ver tus datos</h2>
+      <ul>
+        <li><strong>Todas las personas de tu grupo</strong> pueden ver y descargar la hoja completa, incluidos tu email y tus entrenos.</li>
+        <li>Tu pestaña está protegida para que solo la edites tú. <strong>Quien creó el grupo</strong>, como dueño de la hoja, puede editar o borrar cualquier dato e invitar a más gente.</li>
+        <li>Google trata los datos según su propia <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">política de privacidad</a>.</li>
+      </ul>
 
-    <h2>Servicios de terceros</h2>
-    <p>La página carga los scripts de login y del selector de archivos de Google desde los servidores de Google. No hay analítica, publicidad ni cookies propias. La librería de gráficas (Chart.js) se sirve desde la propia web.</p>
+      <h2>Servicios de terceros</h2>
+      <p>La página carga los scripts de login y del selector de archivos de Google desde los servidores de Google. No hay analítica, publicidad ni cookies propias. La librería de gráficas (Chart.js) y todo lo demás se sirven desde la propia web.</p>
 
-    <h2>Cómo borrar tus datos o retirar el acceso</h2>
-    <ul>
-      <li>Para retirar el permiso de la app, ve a <a href="https://myaccount.google.com/connections" target="_blank" rel="noopener">Google › Apps y servicios conectados</a> y elimina GymTracker.</li>
-      <li>Para borrar tus entrenos, bórralos desde la app o elimina tu pestaña en la hoja del grupo. Si creaste el grupo, puedes borrar la hoja entera desde tu Drive.</li>
-    </ul>
+      <h2>Cómo borrar tus datos o retirar el acceso</h2>
+      <ul>
+        <li>Para retirar el permiso de la app, ve a <a href="https://myaccount.google.com/connections" target="_blank" rel="noopener">Google › Apps y servicios conectados</a> y elimina GymTracker.</li>
+        <li>Para borrar tus entrenos, bórralos desde la app o elimina tu pestaña en la hoja del grupo. Si creaste el grupo, puedes borrar la hoja entera desde tu Drive.</li>
+      </ul>
 
-    <h2>Contacto</h2>
-    <p>Para dudas o problemas, abre un <em>issue</em> en el repositorio de GymTracker en GitHub.</p>
+      <h2>Contacto</h2>
+      <p>Para dudas o problemas, abre un <em>issue</em> en <a href="https://github.com/cruzlorite/gymtracker" target="_blank" rel="noopener">el repositorio de GymTracker en GitHub</a>.</p>
+    </article>
+
+    <article data-lang-block="en" lang="en">
+      <h1>Privacy</h1>
+      <p class="updated">Last updated: 19 October 2026</p>
+      <p>GymTracker is a static website with no server of its own. Whoever publishes it never receives, sees or stores any of your data: your browser talks to Google directly and everything is stored in Google Sheets spreadsheets in Google Drive.</p>
+
+      <h2>What permissions it asks for</h2>
+      <ul>
+        <li><strong>Your name, email and profile picture</strong> (<code>openid</code>, <code>email</code>, <code>profile</code>): to identify you within your groups.</li>
+        <li><strong>Access to the Drive files you use with the app</strong> (<code>drive.file</code>): only the sheets the app creates or that you pick in the Google file picker. The app cannot see the rest of your Drive.</li>
+      </ul>
+
+      <h2>What data is stored and where</h2>
+      <ul>
+        <li>Each group is a spreadsheet in the Google Drive of whoever created it.</li>
+        <li>It stores your email, your name, the address of your profile picture, the date you joined, your sets (date, exercise, reps, kilos and notes), and the group's challenges and custom exercises.</li>
+        <li>Your Google access token only lives in the tab's memory and disappears when you close it.</li>
+        <li>Your browser's local storage keeps: your email (to speed up the next sign-in), the last group you opened, your preferences (language, theme, timer and weight increment) and any sets not yet uploaded to the sheet, for example while offline. Those are removed automatically as soon as they reach the sheet. Your email is removed when you sign out, and everything else when you clear the site's data in your browser.</li>
+      </ul>
+
+      <h2>Who can see your data</h2>
+      <ul>
+        <li><strong>Everyone in your group</strong> can see and download the whole sheet, including your email and your workouts.</li>
+        <li>Your tab is protected so only you can edit it. <strong>The group creator</strong>, as the sheet's owner, can edit or delete any data and invite more people.</li>
+        <li>Google handles the data under its own <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">privacy policy</a>.</li>
+      </ul>
+
+      <h2>Third-party services</h2>
+      <p>The page loads Google's sign-in and file picker scripts from Google's servers. There is no analytics, advertising or first-party cookies. The charting library (Chart.js) and everything else is served from this website.</p>
+
+      <h2>How to delete your data or revoke access</h2>
+      <ul>
+        <li>To revoke the app's permission, go to <a href="https://myaccount.google.com/connections" target="_blank" rel="noopener">Google › Third-party apps &amp; services</a> and remove GymTracker.</li>
+        <li>To delete your workouts, delete them in the app or remove your tab from the group sheet. If you created the group, you can delete the whole sheet from your Drive.</li>
+      </ul>
+
+      <h2>Contact</h2>
+      <p>For questions or issues, open an <em>issue</em> in <a href="https://github.com/cruzlorite/gymtracker" target="_blank" rel="noopener">the GymTracker repository on GitHub</a>.</p>
+    </article>
   </main>
+  <script>
+    (function () {
+      function paint() {
+        document.querySelectorAll('[data-set-lang]').forEach(function (b) { b.classList.toggle('on', b.dataset.setLang === document.documentElement.lang); });
+      }
+      document.querySelectorAll('[data-set-lang]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          document.documentElement.lang = b.dataset.setLang;
+          try { localStorage.setItem('gt:lang', b.dataset.setLang); } catch (e) { /* nada */ }
+          paint();
+        });
+      });
+      paint();
+    })();
+  </script>
 </body>
 </html>

@@ -22,7 +22,7 @@ export function weekStart(s) {
   return toISO(d);
 }
 
-export const PERIODS = { 7: '7 días', 30: '30 días', 90: '90 días', 365: '1 año', all: 'Todo' };
+export const PERIODS = ['7', '30', '90', '365', 'all'];
 export function periodRange(p) {
   const to = todayISO();
   return { from: p === 'all' ? '0000-01-01' : addDays(to, -(Number(p) - 1)), to };
@@ -118,4 +118,40 @@ export function challengeValue(ch, entries) {
     }
     default: return null;
   }
+}
+
+/**
+ * Ids de las series que fueron récord personal en su momento: superan el mejor 1RM estimado de todas
+ * las series anteriores del mismo ejercicio. La primera serie de un ejercicio no cuenta como récord.
+ */
+export function prIds(entries) {
+  const best = new Map();
+  const out = new Set();
+  const sorted = entries.map((e, i) => [e, i]).sort((a, b) => (a[0].date < b[0].date ? -1 : a[0].date > b[0].date ? 1 : a[1] - b[1]));
+  for (const [e] of sorted) {
+    if (!e.exercise) continue;
+    const v = e1rm(e.weight, e.reps);
+    const prev = best.get(e.exercise);
+    if (prev !== undefined && v > prev) out.add(e.id);
+    if (prev === undefined || v > prev) best.set(e.exercise, v);
+  }
+  return out;
+}
+
+/** Series de un ejercicio en el último día anterior a `before` en que se hizo. */
+export function lastSession(entries, exercise, before) {
+  let date = '';
+  for (const e of entries) if (e.exercise === exercise && e.date < before && e.date > date) date = e.date;
+  return date ? { date, sets: entries.filter((e) => e.exercise === exercise && e.date === date) } : null;
+}
+
+/** Historial de un ejercicio agrupado por día, del más reciente al más antiguo. */
+export function exerciseHistory(entries, exercise) {
+  const m = new Map();
+  for (const e of entries) {
+    if (e.exercise !== exercise) continue;
+    if (!m.has(e.date)) m.set(e.date, []);
+    m.get(e.date).push(e);
+  }
+  return [...m].sort((a, b) => (a[0] < b[0] ? 1 : -1)).map(([date, sets]) => ({ date, sets }));
 }
