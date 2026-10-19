@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Privacidad · GymTracker</title>
+  <meta name="description" content="Qué datos usa GymTracker y dónde se guardan.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏋️</text></svg>">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .legal { max-width: 720px; }
+    .legal h2 { margin: 1.6em 0 .4em; font-size: 1.15rem; }
+    .legal ul { padding-left: 1.2em; }
+    .legal li { margin: .3em 0; }
+    .legal a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <main class="content legal">
+    <p><a href="./">← Volver a GymTracker</a></p>
+    <h1>Privacidad</h1>
+    <p class="muted">Última actualización: 19 de octubre de 2026</p>
+
+    <p>GymTracker es una página web estática, sin servidor propio. Quien la publica no recibe, ve ni guarda ninguno de tus datos: tu navegador habla directamente con Google y todo se guarda en hojas de cálculo de Google Drive.</p>
+
+    <h2>Qué permisos pide a tu cuenta de Google</h2>
+    <ul>
+      <li><strong>Tu nombre, email y foto de perfil</strong> (<code>openid</code>, <code>email</code>, <code>profile</code>): para identificarte dentro de tus grupos.</li>
+      <li><strong>Acceso a los archivos de Drive que uses con la app</strong> (<code>drive.file</code>): solo las hojas que crea la propia app o que eliges tú en el selector de Google. La app no puede ver el resto de tu Drive.</li>
+    </ul>
+
+    <h2>Qué datos se guardan y dónde</h2>
+    <ul>
+      <li>Cada grupo es una hoja de cálculo en el Google Drive de quien lo crea.</li>
+      <li>En ella se guardan tu email, tu nombre, la dirección de tu foto de perfil, la fecha en que te uniste, tus entrenos (fecha, ejercicio, series, repeticiones, kilos y notas) y los retos del grupo.</li>
+      <li>El token de acceso de Google se guarda solo en la memoria de la pestaña y desaparece al cerrarla. En el almacenamiento local del navegador quedan tu email (para agilizar el próximo login) y el último grupo que abriste. El email se borra al cerrar sesión, y ambos al limpiar los datos del sitio en el navegador.</li>
+    </ul>
+
+    <h2>Quién puede ver tus datos</h2>
+    <ul>
+      <li><strong>Todas las personas de tu grupo</strong> pueden ver y descargar la hoja completa, incluidos tu email y tus entrenos.</li>
+      <li>Tu pestaña está protegida para que solo la edites tú. <strong>Quien creó el grupo</strong>, como dueño de la hoja, puede editar o borrar cualquier dato e invitar a más gente.</li>
+      <li>Google trata los datos según su propia <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">política de privacidad</a>.</li>
+    </ul>
+
+    <h2>Servicios de terceros</h2>
+    <p>La página carga los scripts de login y del selector de archivos de Google desde los servidores de Google. No hay analítica, publicidad ni cookies propias. La librería de gráficas (Chart.js) se sirve desde la propia web.</p>
+
+    <h2>Cómo borrar tus datos o retirar el acceso</h2>
+    <ul>
+      <li>Para retirar el permiso de la app, ve a <a href="https://myaccount.google.com/connections" target="_blank" rel="noopener">Google › Apps y servicios conectados</a> y elimina GymTracker.</li>
+      <li>Para borrar tus entrenos, bórralos desde la app o elimina tu pestaña en la hoja del grupo. Si creaste el grupo, puedes borrar la hoja entera desde tu Drive.</li>
+    </ul>
+
+    <h2>Contacto</h2>
+    <p>Para dudas o problemas, abre un <em>issue</em> en el repositorio de GymTracker en GitHub.</p>
+  </main>
+</body>
+</html>

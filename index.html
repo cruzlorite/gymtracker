@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>GymTracker</title>
+  <meta name="description" content="Registra tus entrenos y compite con tus amigos.">
+  <meta name="theme-color" content="#f0612a">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏋️</text></svg>">
+  <link rel="stylesheet" href="styles.css">
+  <!-- Chart.js 4.4.1 servido desde el repo: ningún tercero puede inyectar código que vea el token de Google. -->
+  <script src="vendor/chart.umd.min.js"></script>
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <div id="app"><main class="landing"><p class="muted">Cargando…</p></main></div>
+  <dialog id="modal"></dialog>
+  <div id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
