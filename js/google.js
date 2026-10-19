@@ -45,13 +45,23 @@ export const loadPicker = () =>
   loadScript('https://apis.google.com/js/api.js').then(() => new Promise((r) => window.gapi.load('picker', r)));
 
 // ---------- sign-in ----------
-let token = null;
-let tokenExp = 0;
-let forceConsent = false;
 const HINT_KEY = 'gt:hint';
+const TOKEN_KEY = 'gt:token';
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const lsSet = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch { /* no storage */ } };
 export const savedHint = () => lsGet(HINT_KEY) || '';
+
+let token = null;
+let tokenExp = 0;
+let forceConsent = false;
+// Keep a still-valid token (at most 1 hour) so reopening the app, e.g. the installed PWA, doesn't ask
+// to sign in again. Trade-off: while it lasts, it's readable by anyone with access to this browser profile.
+try {
+  const saved = JSON.parse(lsGet(TOKEN_KEY) || 'null');
+  if (saved?.exp > Date.now()) ({ token, exp: tokenExp } = saved);
+  else lsSet(TOKEN_KEY, null);
+} catch { lsSet(TOKEN_KEY, null); }
+function dropToken() { token = null; tokenExp = 0; lsSet(TOKEN_KEY, null); }
 export const tokenValid = () => Boolean(token) && Date.now() < tokenExp;
 
 /** Opens Google's popup. Must be called directly from a click, before any await. */
@@ -73,6 +83,7 @@ export function signIn() {
         forceConsent = false;
         token = r.access_token;
         tokenExp = Date.now() + (Number(r.expires_in || 3600) - 60) * 1000;
+        lsSet(TOKEN_KEY, JSON.stringify({ token, exp: tokenExp }));
         resolve();
       },
       error_callback: (e) => reject(new Error(
@@ -87,7 +98,7 @@ export function signIn() {
 }
 
 export function signOut() {
-  token = null; tokenExp = 0;
+  dropToken();
   lsSet(HINT_KEY, null);
 }
 
@@ -100,7 +111,7 @@ async function api(url, { method = 'GET', body, query } = {}) {
     headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (res.status === 401) throw new AuthError();
+  if (res.status === 401) { dropToken(); throw new AuthError(); }
   if (!res.ok) {
     let msg = '';
     try { msg = (await res.json()).error?.message || ''; } catch { /* no body */ }

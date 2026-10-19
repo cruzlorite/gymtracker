@@ -34,7 +34,7 @@ const params = new URLSearchParams(location.search);
 const S = {
   store: null, me: null, groups: [], group: null, outbox: null,
   tab: 'log', groupTab: 'ranking',
-  day: St.todayISO(), period: '30', month: St.todayISO().slice(0, 7), exercise: '', compare: true, profile: '',
+  day: St.todayISO(), period: '30', month: St.todayISO().slice(0, 7), exercise: '', metric: 'e1rm', compare: true, profile: '',
   sheet: null, // { kind: 'picker', q, cat } | { kind: 'exercise', name, view, edit, w, r }
   pendingGroup: params.get('group'), needsPicker: null, chart: null, loadedAt: 0,
 };
@@ -83,13 +83,24 @@ function avatar(m, size = '') {
 // Pictures that fail to load are removed so the initials show (no onerror attributes in the HTML).
 document.addEventListener('error', (e) => { if (e.target.matches?.('[data-avatar-img]')) e.target.remove(); }, true);
 
+// The toast is a popover so it lives in the browser's top layer: re-showing it puts it above an open
+// modal dialog, whose blurred backdrop would otherwise cover it.
 let toastTimer;
+const popover = typeof $toast.showPopover === 'function';
+function hideToast() {
+  $toast.className = '';
+  if (popover) setTimeout(() => { if (!$toast.classList.contains('show')) try { $toast.hidePopover(); } catch { /* already hidden */ } }, 250);
+}
 function toast(msg, { error = false, action, onAction, ic } = {}) {
   clearTimeout(toastTimer);
+  if (popover) {
+    try { $toast.hidePopover(); } catch { /* not shown */ }
+    $toast.showPopover();
+  }
   $toast.className = `show${error ? ' error' : ''}`;
   $toast.innerHTML = `${ic ? icon(ic) : ''}<span>${esc(msg)}</span>${action ? `<button class="toast-btn" data-toast-action>${esc(action)}</button>` : ''}`;
-  if (action) $toast.querySelector('[data-toast-action]').onclick = () => { $toast.className = ''; onAction(); };
-  toastTimer = setTimeout(() => { $toast.className = ''; }, action ? 15000 : error ? 10000 : 3500);
+  if (action) $toast.querySelector('[data-toast-action]').onclick = () => { hideToast(); onAction(); };
+  toastTimer = setTimeout(hideToast, action ? 15000 : error ? 10000 : 3500);
 }
 
 async function run(fn) {
@@ -124,7 +135,46 @@ function assignColors(g) {
 function startSession(store, me, outboxKey) {
   S.store = store;
   S.me = me;
-  S.outbox = new Outbox(outboxKey, store, renderSync);
+  S.outbox = new Outbox(outboxKey, store, () => { renderSync(); saveCache(); });
+}
+
+// ---------- local session and cache ----------
+// The app remembers who is signed in and keeps a copy of the open group on the device, so it opens
+// instantly (even offline or with an expired Google session) and sets can be logged right away.
+const SESSION_KEY = 'gt:session';
+const cacheKey = (email) => `gt:cache:${email}`;
+const readJSON = (k) => { try { return JSON.parse(ls.get(k) || 'null'); } catch { return null; } };
+
+function saveCache() {
+  if (S.store?.kind !== 'google' || !S.me) return;
+  ls.set(SESSION_KEY, JSON.stringify({ me: S.me }));
+  if (S.group?.isMember) ls.set(cacheKey(S.me.email), JSON.stringify({ groups: S.groups, group: S.group }));
+}
+
+function clearCache() {
+  if (S.me) { try { localStorage.removeItem(cacheKey(S.me.email)); } catch { /* no storage */ } }
+  try { localStorage.removeItem(SESSION_KEY); } catch { /* no storage */ }
+}
+
+/** Reopens the last session from the device. Returns false if there's nothing to restore. */
+function restoreSession() {
+  const sess = readJSON(SESSION_KEY);
+  if (!sess?.me?.email || !G.isConfigured() || S.pendingGroup) return false;
+  startSession(new G.SheetStore(sess.me), sess.me, `gt:outbox:${sess.me.email}`);
+  const cache = readJSON(cacheKey(sess.me.email));
+  S.groups = cache?.groups || [];
+  if (cache?.group?.id) {
+    const g = cache.group;
+    g.entries = S.outbox.apply(g.id, g.entries || [], S.me.email);
+    assignColors(g);
+    Ex.setCustomExercises(g.exercises || []);
+    S.group = g;
+    S.profile = S.me.email;
+  }
+  render();
+  // With a still-valid token, refresh in the background to pick up friends' new workouts.
+  if (G.tokenValid()) run(async () => { S.outbox.flush(); S.groups = await S.store.listGroups(); await (S.group ? openGroup(S.group.id) : afterLogin()); });
+  return true;
 }
 
 async function afterLogin() {
@@ -146,6 +196,7 @@ async function openGroup(id) {
   S.loadedAt = Date.now();
   if (!g.members.some((m) => m.email === S.profile)) S.profile = S.me.email;
   ls.set('gt:lastGroup', id);
+  saveCache();
   render();
   if (S.sheet) renderSheet();
 }
@@ -167,6 +218,11 @@ function renderSync() {
   if (!el) return;
   const o = S.outbox;
   const n = o?.pending || 0;
+  // Restored session without a valid Google token: offer to connect (one tap) to sync and refresh.
+  if (o && S.store.kind === 'google' && !G.tokenValid() && !o.busy) {
+    el.innerHTML = `<button class="sync ${n ? 'warn' : 'connect'}" data-action="reconnect">${icon('cloudOff')}<span>${n ? t('sync.reconnect', { n }) : t('sync.connect')}</span></button>`;
+    return;
+  }
   if (!o || (!n && !o.busy)) { el.innerHTML = ''; return; }
   if (o.error?.auth) {
     el.innerHTML = `<button class="sync warn" data-action="reconnect">${icon('cloudOff')}<span>${t('sync.reconnect', { n })}</span></button>`;
@@ -446,21 +502,67 @@ function viewHistory() {
 }
 
 // ---------- Progress ----------
+/** Exercises with data, most logged first. */
 function exerciseOptions(entries) {
   const freq = new Map();
-  for (const e of entries) if (e.exercise && e.weight > 0) freq.set(e.exercise, (freq.get(e.exercise) || 0) + 1);
+  for (const e of entries) if (e.exercise) freq.set(e.exercise, (freq.get(e.exercise) || 0) + 1);
   return [...freq].sort((a, b) => b[1] - a[1]).map(([ex]) => ex);
 }
+const hasWeight = (name) => S.group.entries.some((e) => e.exercise === name && e.weight > 0);
+/** Bodyweight-only exercises can only be charted by reps. */
+const metricFor = (name) => (hasWeight(name) ? S.metric : 'reps');
+const fmtMetric = (metric, v, d = 1) => (metric === 'reps' ? t('unit.reps', { n: fmtN(v) }) : metric === 'volume' ? fmtKg(v) : `${fmtN(v, d)} kg`);
 
 function periodChips() {
   return `<div class="seg" role="group" aria-label="${t('period.label')}">${St.PERIODS.map((k) =>
     `<button class="${S.period === k ? 'on' : ''}" data-action="period" data-p="${k}">${t(`period.${k}`)}</button>`).join('')}</div>`;
 }
 
+function metricChips(name) {
+  const weighted = hasWeight(name);
+  const current = metricFor(name);
+  return `<div class="seg" role="group" aria-label="${t('metric.label')}">${St.METRICS.map((k) =>
+    `<button class="${current === k ? 'on' : ''}" data-action="metric" data-m="${k}" ${!weighted && k !== 'reps' ? 'disabled' : ''}>${t(`metric.${k}`)}</button>`).join('')}</div>`;
+}
+
+/** My bests and rep records (1RM, 3RM, 5RM…) for one exercise. Shared by Progress and the exercise sheet. */
+function recordsBlock(name) {
+  const sum = St.exerciseSummary(mine(), name);
+  if (!sum) return `<p class="muted">${t('ex.noHistory')}</p>`;
+  const tile = (label, value, date, detail = '') =>
+    `<div class="tile"><span>${label}</span><strong>${value}</strong>${date ? `<em>${detail ? `${detail} · ` : ''}${fmtDate(date)}</em>` : ''}</div>`;
+  const set = (e) => `${fmtW(e.weight)} × ${fmtN(e.reps)}`;
+  if (!(sum.weight.value > 0)) {
+    return `<div class="tiles">
+      ${tile(t('metric.reps'), fmtN(sum.reps.value), sum.reps.date)}
+      ${tile(t('records.totalSets'), fmtN(sum.sets))}
+      ${tile(t('ex.sessions'), fmtN(sum.sessions))}
+    </div>`;
+  }
+  const rows = St.repRecords(mine(), name);
+  return `<div class="tiles">
+      ${tile(t('metric.e1rm'), `${fmtN(sum.e1rm.value, 1)} kg`, sum.e1rm.date, set(sum.e1rm.set))}
+      ${tile(t('metric.weight'), fmtW(sum.weight.value), sum.weight.date, `× ${fmtN(sum.weight.set.reps)}`)}
+      ${tile(t('records.bestSet'), fmtKg(sum.bestSet.value), sum.bestSet.date, set(sum.bestSet.set))}
+      ${tile(t('records.bestSession'), fmtKg(sum.sessionVolume.value), sum.sessionVolume.date)}
+    </div>
+    <table class="table rep-table">
+      <thead><tr><th>${t('records.reps')}</th><th class="r">${t('records.actual')}</th><th class="r">${t('records.estimated')}</th></tr></thead>
+      <tbody>${rows.map(({ reps, actual, estimate }) => `<tr>
+        <td><strong>${reps}RM</strong></td>
+        <td class="r">${actual ? `${set(actual)} <span class="muted">· ${fmtDate(actual.date)}</span>` : '<span class="muted">—</span>'}</td>
+        <td class="r muted">${fmtN(estimate, 1)} kg</td>
+      </tr>`).join('')}</tbody>
+    </table>
+    <p class="fine">${t('records.help')}</p>`;
+}
+
 function viewProgress() {
   const exs = exerciseOptions(S.group.entries);
   if (!exs.length) return `<div class="view-head"><h1>${t('nav.progress')}</h1></div>${emptyState('chart', t('progress.emptyTitle'), t('progress.emptyText'))}`;
   if (!exs.includes(S.exercise)) S.exercise = exerciseOptions(mine())[0] || exs[0];
+  const weighted = hasWeight(S.exercise);
+  const metric = metricFor(S.exercise);
   const r = St.periodRange(S.period);
   const rows = members().map((m) => ({ m, imp: St.improvement(entriesOf(m.email), r, S.exercise).details[0] }));
   const myPrs = St.prs(mine()).filter((p) => p.e1rm > 0).sort((a, b) => b.e1rm - a.e1rm);
@@ -469,14 +571,20 @@ function viewProgress() {
       <div class="select-wrap"><select data-change="exercise" aria-label="${t('progress.exercise')}">${exs.map((ex) =>
         `<option value="${esc(ex)}" ${ex === S.exercise ? 'selected' : ''}>${esc(Ex.exName(ex))}</option>`).join('')}</select>${icon('down')}</div>
     </div>
+    <div class="toolbar">${metricChips(S.exercise)}</div>
     <div class="toolbar">${periodChips()}
       <label class="switch-label"><span>${t('progress.compare')}</span><span class="switch"><input type="checkbox" data-change="compare" ${S.compare ? 'checked' : ''}><i></i></span></label>
     </div>
-    <div class="card chart-card"><div class="chart-box"><canvas id="chart" aria-label="${t('progress.chartLabel')}"></canvas></div>
-      <p class="fine">${t('progress.e1rmHelp')}</p></div>
+    <div class="card chart-card"><div class="chart-box"><canvas id="chart" aria-label="${t(`metric.${metric}`)}"></canvas></div>
+      <p class="fine">${t(`metric.${metric}.help`)}</p></div>
+    <section class="card records-card">
+      <h3>${icon('trophy')} ${t('records.mine', { name: esc(Ex.exName(S.exercise)) })}</h3>
+      ${recordsBlock(S.exercise)}
+    </section>
     <div class="grid two">
-      <div class="card">
+      ${weighted ? `<div class="card">
         <h3>${t('progress.improvement')}</h3>
+        <p class="muted card-sub">${t('progress.improvementSub')}</p>
         <table class="table">
           <thead><tr><th>${t('progress.person')}</th><th class="r">${t('progress.start')}</th><th class="r">${t('progress.best')}</th><th class="r">${t('progress.change')}</th></tr></thead>
           <tbody>${rows.sort((a, b) => (b.imp?.pct ?? -9) - (a.imp?.pct ?? -9)).map(({ m, imp }) => `<tr class="${m.email === S.me.email ? 'me' : ''}">
@@ -485,11 +593,11 @@ function viewProgress() {
               : `<td class="r muted" colspan="3">${t('progress.needTwo')}</td>`}
           </tr>`).join('')}</tbody>
         </table>
-      </div>
+      </div>` : ''}
       <div class="card">
         <h3>${icon('trophy')} ${t('progress.myRecords')}</h3>
         ${myPrs.length ? `<table class="table"><thead><tr><th>${t('progress.exercise')}</th><th class="r">${t('progress.bestSet')}</th><th class="r">${t('progress.e1rm')}</th></tr></thead>
-          <tbody>${myPrs.map((p) => `<tr><td><button class="link" data-action="open-ex" data-name="${esc(p.exercise)}">${esc(Ex.exName(p.exercise))}</button></td>
+          <tbody>${myPrs.map((p) => `<tr><td><button class="link" data-action="progress-ex" data-name="${esc(p.exercise)}">${esc(Ex.exName(p.exercise))}</button></td>
             <td class="r">${fmtW(p.best.weight)} × ${fmtN(p.best.reps)}</td><td class="r"><strong>${fmtN(p.e1rm, 1)} kg</strong></td></tr>`).join('')}</tbody></table>`
           : `<p class="muted">${t('progress.noRecords')}</p>`}
       </div>
@@ -504,9 +612,11 @@ function mountChart() {
   const grid = css.getPropertyValue('--line').trim();
   const accent = css.getPropertyValue('--accent').trim();
   const r = St.periodRange(S.period);
+  const metric = metricFor(S.exercise);
   const who = S.compare ? members() : members().filter((m) => m.email === S.me.email);
   const datasets = who.map((m) => {
-    const data = St.bestByDate(entriesOf(m.email).filter((e) => e.date >= r.from && e.date <= r.to), S.exercise)
+    const data = St.dailySeries(entriesOf(m.email).filter((e) => e.date >= r.from && e.date <= r.to), S.exercise, metric)
+      .filter((p) => p.value > 0)
       .map((p) => ({ x: +St.parseISO(p.date), y: Math.round(p.value * 10) / 10 }));
     const me = m.email === S.me.email;
     const color = me && !S.compare ? accent : m.color;
@@ -523,13 +633,13 @@ function mountChart() {
       interaction: { mode: 'nearest', intersect: false },
       scales: {
         x: { type: 'linear', ticks: { color: text, maxTicksLimit: 6, callback: (v) => df({ day: 'numeric', month: 'short' }).format(new Date(v)) }, grid: { color: grid } },
-        y: { ticks: { color: text, callback: (v) => `${fmtN(v)} kg` }, grid: { color: grid } },
+        y: { ticks: { color: text, callback: (v) => fmtMetric(metric, v, 0) }, grid: { color: grid } },
       },
       plugins: {
         legend: { display: S.compare, labels: { color: text, usePointStyle: true, boxWidth: 8 } },
         tooltip: { callbacks: {
           title: (items) => cap(df({ weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(items[0].parsed.x))),
-          label: (it) => ` ${it.dataset.label}: ${fmtN(it.parsed.y, 1)} kg`,
+          label: (it) => ` ${it.dataset.label}: ${fmtMetric(metric, it.parsed.y)}`,
         } },
       },
     },
@@ -696,7 +806,11 @@ function renderSheet() {
   document.body.classList.toggle('sheet-open', Boolean(S.sheet));
   if (!S.sheet) { $sheet.className = ''; $sheet.innerHTML = ''; return; }
   $sheet.className = 'open';
-  $sheet.innerHTML = `<div class="sheet-panel" role="dialog" aria-modal="true">${S.sheet.kind === 'picker' ? pickerSheet() : exerciseSheet()}</div>`;
+  const html = S.sheet.kind === 'picker' ? pickerSheet() : exerciseSheet();
+  // Re-renders swap the panel's contents only, so the slide-in animation plays once when it opens.
+  const panel = $sheet.querySelector('.sheet-panel');
+  if (panel) panel.innerHTML = html;
+  else $sheet.innerHTML = `<div class="sheet-panel" role="dialog" aria-modal="true">${html}</div>`;
   if (S.sheet.kind === 'picker') {
     const q = document.getElementById('picker-q');
     if (q && matchMedia('(hover: hover)').matches) q.focus();
@@ -790,11 +904,11 @@ function exerciseSheet() {
         <span class="muted"><span class="cat-dot" style="--c:${cat.color}"></span>${esc(Ex.catLabel(cat))} · ${S.day === today ? t('day.today') : fmtLong(S.day)}</span></div>
       <button class="icon-btn" data-action="timer-settings" aria-label="${t('timer.title')}">${icon('timer')}</button>
     </header>
-    <div class="seg wide">
-      <button class="${sh.view === 'log' ? 'on' : ''}" data-action="ex-view" data-v="log">${t('ex.log')}</button>
-      <button class="${sh.view === 'history' ? 'on' : ''}" data-action="ex-view" data-v="history">${t('ex.history')}</button>
-    </div>
-    <div class="sheet-body">${sh.view === 'history' ? exerciseHistoryView(name) : exerciseLogView(name)}</div>`;
+    <div class="seg wide">${['log', 'history', 'records'].map((v) =>
+      `<button class="${sh.view === v ? 'on' : ''}" data-action="ex-view" data-v="${v}">${t(`ex.${v}`)}</button>`).join('')}</div>
+    <div class="sheet-body">${sh.view === 'history' ? exerciseHistoryView(name)
+      : sh.view === 'records' ? `${recordsBlock(name)}<button class="btn ghost block see-chart" data-action="ex-chart">${icon('chart')} ${t('ex.seeChart')}</button>`
+        : exerciseLogView(name)}</div>`;
 }
 
 function stepper(field, label, value, unit) {
@@ -847,14 +961,7 @@ function exerciseHistoryView(name) {
   const hist = St.exerciseHistory(all, name);
   if (!hist.length) return `<p class="muted pad">${t('ex.noHistory')}</p>`;
   const prs = St.prIds(all);
-  const best = St.prs(all.filter((e) => e.exercise === name))[0];
-  return `<div class="tiles three">
-      <div class="tile"><span>${t('progress.e1rm')}</span><strong>${fmtN(best?.e1rm || 0, 1)} kg</strong></div>
-      <div class="tile"><span>${t('ex.maxWeight')}</span><strong>${fmtW(best?.weight || 0)}</strong></div>
-      <div class="tile"><span>${t('ex.sessions')}</span><strong>${fmtN(hist.length)}</strong></div>
-    </div>
-    <button class="btn ghost block" data-action="ex-chart">${icon('chart')} ${t('ex.seeChart')}</button>
-    <ul class="history">${hist.slice(0, 30).map((h) => `<li>
+  return `<ul class="history">${hist.slice(0, 30).map((h) => `<li>
       <div class="s-date">${fmtLong(h.date)}</div>
       <ol class="sets">${h.sets.map((e, i) => `<li>${setLine(e, i, prs)}</li>`).join('')}</ol>
     </li>`).join('')}</ul>`;
@@ -1099,6 +1206,7 @@ const actions = {
     await G.signIn(); // first line: must run right in the click so the popup isn't blocked
     const me = await G.getProfile();
     startSession(new G.SheetStore(me), me, `gt:outbox:${me.email}`);
+    saveCache();
     G.loadPicker().catch(() => {});
     await afterLogin();
   }),
@@ -1111,7 +1219,7 @@ const actions = {
   logout: () => {
     closeModal();
     Timer.stop();
-    if (S.store?.kind === 'google') G.signOut();
+    if (S.store?.kind === 'google') { G.signOut(); clearCache(); }
     Object.assign(S, { store: null, me: null, groups: [], group: null, outbox: null, needsPicker: null, tab: 'log', sheet: null, day: St.todayISO() });
     renderSheet();
     render();
@@ -1134,6 +1242,8 @@ const actions = {
   tab: (el) => { S.tab = el.dataset.tab; render(); window.scrollTo({ top: 0 }); },
   'group-tab': (el) => { S.groupTab = el.dataset.v; render(); },
   period: (el) => { S.period = el.dataset.p; render(); },
+  metric: (el) => { S.metric = el.dataset.m; render(); },
+  'progress-ex': (el) => { S.exercise = el.dataset.name; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); },
   month: (el) => { S.month = el.dataset.m; render(); },
   day: (el) => { S.day = el.dataset.d; render(); },
   profile: (el) => { S.profile = el.dataset.e; render(); },
@@ -1172,6 +1282,8 @@ const actions = {
     if (!e) return;
     if (S.sheet.edit === e.id) { S.sheet.edit = null; } else { Object.assign(S.sheet, { edit: e.id, w: e.weight, r: e.reps }); }
     renderSheet();
+    // The steppers are at the top: bring them into view so the edit doesn't happen off-screen.
+    if (S.sheet.edit) $sheet.querySelector('.sheet-panel')?.scrollTo({ top: 0, behavior: 'smooth' });
   },
   'cancel-edit': () => { S.sheet.edit = null; renderSheet(); },
   'del-set': (el) => {
@@ -1255,6 +1367,7 @@ const forms = {
       await S.store.addExercise(S.group.id, ex);
       S.group.exercises = [...(S.group.exercises || []), ex];
       Ex.setCustomExercises(S.group.exercises);
+      saveCache();
       toast(t('newEx.created', { name: ex.name }), { ic: 'check' });
       open(ex.name);
     });
@@ -1343,5 +1456,5 @@ window.addEventListener('online', () => S.outbox?.flush());
 
 // ---------- startup ----------
 applyTheme();
-render();
+if (!restoreSession()) render();
 if (G.isConfigured()) G.loadGis().catch((e) => toast(e.message, { error: true }));

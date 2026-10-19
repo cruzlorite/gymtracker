@@ -12,6 +12,7 @@ Log your workouts set by set, rest with the built-in timer and compete with your
 - **Personal records** flagged with a trophy as you log them, plus per-exercise history.
 - **Group**: attendance, improvement, streak and volume rankings; challenges; profiles; a shared calendar; estimated-1RM progress charts.
 - **No lost sets**: every set shows up instantly and syncs to the sheet in the background. If you're offline or your Google session expires, it stays on the device and syncs once you're back.
+- **Opens instantly**: the app remembers the session and keeps a copy of the open group on the device, so reopening it (e.g. the installed app) goes straight to your workout. A valid Google token is reused for up to an hour; after that, saving a set renews it in the background (no prompt, since access was already granted).
 - **Installable** on your phone's home screen (PWA manifest). Light and dark themes.
 
 It's a **frontend-only** app: HTML, CSS and JavaScript with no build step and no server. It's published as a static site on GitHub Pages, and the data lives in **Google Sheets**, in the Drive of whoever creates each group.
@@ -133,6 +134,7 @@ All paths are relative, so it works the same under a subdirectory (`/<repo>/`) o
 - The group creator owns the sheet and can edit or delete any data.
 - Any member can edit `_members`, `_challenges` and `_exercises`, e.g. change someone's display name or delete challenges. Sheets keeps a version history to recover changes.
 - Everyone logs whatever they want in their own tab: cheating is trivial.
+- The Google access token is kept in the browser's local storage for up to one hour, and a copy of the open group's data stays on the device until sign-out. Anyone with access to that browser profile could read them; a stolen token only reaches the user's GymTracker sheets and expires within the hour.
 - The Cloud project's name and support email appear on the sign-in screen.
 - If the Cloud project is deleted or Google changes its APIs, sign-in stops working. The data stays in the sheets.
 

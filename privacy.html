@@ -61,8 +61,14 @@
       <ul>
         <li>Cada grupo es una hoja de cálculo en el Google Drive de quien lo crea.</li>
         <li>En ella se guardan tu email, tu nombre, la dirección de tu foto de perfil, la fecha en que te uniste, tus series (fecha, ejercicio, repeticiones, kilos y notas), los retos y los ejercicios que cree el grupo.</li>
-        <li>El token de acceso de Google solo está en la memoria de la pestaña y desaparece al cerrarla.</li>
-        <li>En el almacenamiento local de tu navegador quedan: tu email (para agilizar el próximo login), el último grupo que abriste, tus preferencias (idioma, tema, temporizador e incremento de peso) y las series que aún no se han subido a la hoja, por ejemplo si no había conexión. Estas se borran solas en cuanto llegan a la hoja. El email se borra al cerrar sesión, y todo lo demás al limpiar los datos del sitio en el navegador.</li>
+        <li>En el almacenamiento local de tu navegador quedan, para que la app abra al instante sin volver a pedir login:
+          <ul>
+            <li>el token de acceso de Google, como máximo una hora (después caduca y deja de servir);</li>
+            <li>tu email, nombre y foto, y una copia de los datos del último grupo que abriste (miembros, entrenos, retos y ejercicios);</li>
+            <li>tus preferencias (idioma, tema, temporizador e incremento de peso);</li>
+            <li>las series que aún no se han subido a la hoja, por ejemplo si no había conexión. Se borran solas en cuanto llegan a la hoja.</li>
+          </ul>
+          Al cerrar sesión se borran el token, tu email y la copia del grupo. Todo lo demás se borra al limpiar los datos del sitio en el navegador.</li>
       </ul>
 
       <h2>Quién puede ver tus datos</h2>
@@ -100,8 +106,14 @@
       <ul>
         <li>Each group is a spreadsheet in the Google Drive of whoever created it.</li>
         <li>It stores your email, your name, the address of your profile picture, the date you joined, your sets (date, exercise, reps, kilos and notes), and the group's challenges and custom exercises.</li>
-        <li>Your Google access token only lives in the tab's memory and disappears when you close it.</li>
-        <li>Your browser's local storage keeps: your email (to speed up the next sign-in), the last group you opened, your preferences (language, theme, timer and weight increment) and any sets not yet uploaded to the sheet, for example while offline. Those are removed automatically as soon as they reach the sheet. Your email is removed when you sign out, and everything else when you clear the site's data in your browser.</li>
+        <li>Your browser's local storage keeps the following, so the app opens instantly without asking you to sign in again:
+          <ul>
+            <li>your Google access token, for at most one hour (after that it expires and stops working);</li>
+            <li>your email, name and picture, and a copy of the last group you opened (members, workouts, challenges and exercises);</li>
+            <li>your preferences (language, theme, timer and weight increment);</li>
+            <li>any sets not yet uploaded to the sheet, for example while offline. They're removed automatically as soon as they reach the sheet.</li>
+          </ul>
+          Signing out removes the token, your email and the group copy. Everything else is removed when you clear the site's data in your browser.</li>
       </ul>
 
       <h2>Who can see your data</h2>

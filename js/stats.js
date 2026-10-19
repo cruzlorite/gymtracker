@@ -155,3 +155,64 @@ export function exerciseHistory(entries, exercise) {
   }
   return [...m].sort((a, b) => (a[0] < b[0] ? 1 : -1)).map(([date, sets]) => ({ date, sets }));
 }
+
+// ---------- per-exercise metrics (progress charts and records) ----------
+
+export const METRICS = ['e1rm', 'weight', 'volume', 'reps'];
+const setVolume = (e) => (+e.sets || 1) * (+e.reps || 0) * (+e.weight || 0);
+
+/**
+ * One value per day for an exercise, oldest first:
+ * e1rm = best estimated 1RM · weight = heaviest set · volume = sets × reps × kg · reps = most reps in one set.
+ */
+export function dailySeries(entries, exercise, metric) {
+  const m = new Map();
+  for (const e of entries) {
+    if (e.exercise !== exercise) continue;
+    const cur = m.get(e.date) || 0;
+    if (metric === 'volume') m.set(e.date, cur + setVolume(e));
+    else {
+      const v = metric === 'weight' ? +e.weight || 0 : metric === 'reps' ? +e.reps || 0 : e1rm(e.weight, e.reps);
+      m.set(e.date, Math.max(cur, v));
+    }
+  }
+  return [...m].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([date, value]) => ({ date, value }));
+}
+
+/** All-time bests for one exercise, each with the date it happened. Null fields mean no data. */
+export function exerciseSummary(entries, exercise) {
+  const es = entries.filter((e) => e.exercise === exercise);
+  if (!es.length) return null;
+  const best = (score) => es.reduce((a, e) => (score(e) > score(a) ? e : a));
+  const top = best((e) => e1rm(e.weight, e.reps));
+  const heaviest = best((e) => +e.weight || 0);
+  const bestSet = best((e) => (+e.reps || 0) * (+e.weight || 0));
+  const mostReps = best((e) => +e.reps || 0);
+  const sessions = dailySeries(es, exercise, 'volume');
+  const bestSession = sessions.reduce((a, s) => (s.value > a.value ? s : a), { value: 0, date: '' });
+  return {
+    e1rm: { value: e1rm(top.weight, top.reps), date: top.date, set: top },
+    weight: { value: +heaviest.weight || 0, date: heaviest.date, set: heaviest },
+    bestSet: { value: (+bestSet.reps || 0) * (+bestSet.weight || 0), date: bestSet.date, set: bestSet },
+    reps: { value: +mostReps.reps || 0, date: mostReps.date, set: mostReps },
+    sessionVolume: bestSession,
+    sessions: sessions.length,
+    sets: es.reduce((a, e) => a + (+e.sets || 1), 0),
+  };
+}
+
+export const REP_TARGETS = [1, 2, 3, 4, 5, 6, 8, 10, 12, 15];
+
+/**
+ * Rep records: for each target N, the heaviest weight actually lifted for at least N reps, plus the
+ * weight the best estimated 1RM predicts for N reps (Epley, inverted). Estimates beyond ~10 reps are rough.
+ */
+export function repRecords(entries, exercise) {
+  const es = entries.filter((e) => e.exercise === exercise && (+e.weight || 0) > 0 && (+e.reps || 0) > 0);
+  const top = es.reduce((a, e) => Math.max(a, e1rm(e.weight, e.reps)), 0);
+  return REP_TARGETS.map((n) => {
+    let actual = null;
+    for (const e of es) if (+e.reps >= n && (!actual || +e.weight > +actual.weight)) actual = e;
+    return { reps: n, actual, estimate: top ? (n === 1 ? top : top / (1 + n / 30)) : 0 };
+  });
+}
