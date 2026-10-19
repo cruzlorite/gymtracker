@@ -1453,6 +1453,8 @@ document.addEventListener('visibilitychange', () => {
   if (canLoad && !S.sheet && !$modal.open && Date.now() - S.loadedAt > 120000) run(() => openGroup(S.group.id));
 });
 window.addEventListener('online', () => S.outbox?.flush());
+// iOS Safari ignores user-scalable=no: block its pinch gesture directly.
+document.addEventListener('gesturestart', (e) => e.preventDefault());
 
 // ---------- startup ----------
 applyTheme();

@@ -65,8 +65,9 @@ p { margin: 0; }
 a { color: var(--accent-text); text-underline-offset: 2px; }
 button, input, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
-/* Pinch-zoom stays available (accessibility), but double-tap zoom is off on controls: tapping + twice
-   quickly must add two steps, not zoom the page. */
+/* App-like behaviour: no pinch or double-tap zoom (viewport meta + touch-action; iOS also needs the
+   gesturestart handler in app.js). Android's "Force enable zoom" accessibility setting still overrides it. */
+html { touch-action: pan-x pan-y; }
 button, a, input, select, label, [role=button] { touch-action: manipulation; }
 code { background: var(--surface-2); padding: .1em .35em; border-radius: 6px; font-size: .92em; }
 img { max-width: 100%; }
