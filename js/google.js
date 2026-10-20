@@ -106,11 +106,22 @@ async function api(url, { method = 'GET', body, query } = {}) {
   if (!tokenValid()) throw new AuthError();
   const u = new URL(url);
   for (const [k, v] of Object.entries(query || {})) u.searchParams.set(k, v);
-  const res = await fetch(u, {
-    method,
-    headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  // Never wait forever: a hung request becomes an error after 20 s (the outbox retries it later).
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 20000);
+  let res;
+  try {
+    res = await fetch(u, {
+      method,
+      signal: ctrl.signal,
+      headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (e) {
+    throw e?.name === 'AbortError' ? new Error(t('err.timeout')) : e;
+  } finally {
+    clearTimeout(timer);
+  }
   if (res.status === 401) { dropToken(); throw new AuthError(); }
   if (!res.ok) {
     let msg = '';

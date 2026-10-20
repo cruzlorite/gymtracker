@@ -530,6 +530,11 @@ button.nav-brand { text-align: left; }
 
 /* Loading screen after sign-in */
 .boot { min-height: 100svh; display: grid; place-content: center; justify-items: center; gap: 18px; color: var(--muted); font-weight: 600; }
+.spinner.sm { width: 18px; height: 18px; border-width: 2.5px; }
+.btn-google:disabled { cursor: progress; opacity: .85; }
+/* Escape hatch: appears only if loading takes more than 10 s. */
+.boot-late { display: grid; justify-items: center; gap: 10px; text-align: center; max-width: 280px; visibility: hidden; animation: appear 0s 10s forwards; }
+@keyframes appear { to { visibility: visible; } }
 .spinner { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--surface-3); border-top-color: var(--accent-text); animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 

@@ -275,7 +275,8 @@ function view() {
 
 /** Shown between closing Google's sign-in window and the first data. */
 function bootScreen() {
-  return `<main class="boot" aria-busy="true">${logo(56)}<span class="spinner" aria-hidden="true"></span><p>${t('boot.loading')}</p></main>`;
+  return `<main class="boot" aria-busy="true">${logo(56)}<span class="spinner" aria-hidden="true"></span><p>${t('boot.loading')}</p>
+    <div class="boot-late"><p class="fine">${t('boot.slow')}</p><button class="btn ghost" data-action="boot-cancel">${t('common.back')}</button></div></main>`;
 }
 
 function langToggle() {
@@ -298,7 +299,9 @@ function landing() {
         ${S.pendingGroup ? `<p class="pill-note">${icon('userPlus')} ${t('landing.invited')}</p>` : ''}
         <div class="cta">
           ${configured
-            ? `<button class="btn-google" data-action="login">${googleG}<span>${t('landing.google')}</span></button>`
+            ? (S.signingIn
+              ? `<button class="btn-google" disabled aria-busy="true"><span class="spinner sm" aria-hidden="true"></span><span>${t('landing.opening')}</span></button>`
+              : `<button class="btn-google" data-action="login">${googleG}<span>${t('landing.google')}</span></button>`)
             : `<div class="notice">${t('landing.notConfigured')}</div>`}
           <button class="btn ghost lg" data-action="demo">${t('landing.demo')}</button>
         </div>
@@ -1604,39 +1607,6 @@ function deleteWithUndo(ids, message) {
 }
 
 const actions = {
-  login: () => run(async () => {
-    const signingIn = G.signIn(); // first line: the popup must open right in the click or it gets blocked
-    // The loading screen goes up behind Google's window at once; closing the window brings the landing back.
-    S.booting = true;
-    render();
-    try {
-      await signingIn;
-      // Profile and group list don't depend on each other: fetch both at once.
-      const store = new G.SheetStore(null);
-      const [me, groups] = await Promise.all([G.getProfile(), store.listGroups()]);
-      store.me = me;
-      startSession(store, me, `gt:outbox:${me.email}`);
-      S.groups = groups;
-      // Signed in on this device before: show the last copy of the group now, refresh behind it.
-      const cache = readJSON(cacheKey(me.email));
-      if (!S.pendingGroup && cache?.group?.id && groups.some((g) => g.id === cache.group.id)) {
-        showCachedGroup(cache.group);
-        S.booting = false;
-        render();
-      }
-      saveCache();
-      G.loadPicker().catch(() => {});
-      await afterLogin(groups);
-    } finally {
-      if (S.booting) { S.booting = false; render(); }
-    }
-  }),
-  demo: () => run(async () => {
-    const store = new DemoStore();
-    startSession(store, store.me, null);
-    S.pendingGroup = null;
-    await afterLogin();
-  }),
   logout: () => {
     closeModal();
     Timer.stop();
@@ -1837,7 +1807,56 @@ const actions = {
     history.replaceState(history.state, '', location.pathname);
     run(afterLogin);
   },
+  login: () => {
+    const signingIn = G.signIn(); // first line: the popup must open right in the click or it gets blocked
+    // While Google's window is open the button shows "Opening Google…". Google's window can close without
+    // telling us (some browsers and installed apps), so once we're back on screen with no answer, the
+    // button comes back for another try. A late answer still completes the sign-in.
+    S.signingIn = true;
+    render();
+    const giveUp = () => { if (S.signingIn) { S.signingIn = false; if (!S.store && !S.booting) render(); } };
+    const onBack = () => setTimeout(giveUp, 2500);
+    window.addEventListener('focus', onBack, { once: true });
+    const timeout = setTimeout(giveUp, 60000);
+    const done = () => { S.signingIn = false; clearTimeout(timeout); window.removeEventListener('focus', onBack); };
+    signingIn.then(() => { done(); run(completeLogin); }, (e) => { done(); render(); toast(e.message, { error: true }); });
+  },
+  'boot-cancel': () => { S.booting = false; S.store = null; S.me = null; S.group = null; render(); },
+  demo: () => run(async () => {
+    const store = new DemoStore();
+    startSession(store, store.me, null);
+    S.pendingGroup = null;
+    await afterLogin();
+  }),
 };
+
+/** After Google answers: load profile, groups and the current group behind a loading screen. */
+async function completeLogin() {
+  S.booting = true;
+  render();
+  try {
+      // Profile and group list don't depend on each other: fetch both at once.
+      const store = new G.SheetStore(null);
+      const [me, groups] = await Promise.all([G.getProfile(), store.listGroups()]);
+      store.me = me;
+      startSession(store, me, `gt:outbox:${me.email}`);
+      S.groups = groups;
+      // Signed in on this device before: show the last copy of the group now, refresh behind it.
+      const cache = readJSON(cacheKey(me.email));
+      if (!S.pendingGroup && cache?.group?.id && groups.some((g) => g.id === cache.group.id)) {
+        showCachedGroup(cache.group);
+        S.booting = false;
+        render();
+      }
+      saveCache();
+      G.loadPicker().catch(() => {});
+      await afterLogin(groups);
+  } finally {
+    if (S.booting) { S.booting = false; render(); }
+  }
+}
+
+
 
 const forms = {
   'new-ex': (f) => {
