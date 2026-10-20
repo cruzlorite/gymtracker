@@ -512,7 +512,7 @@ function viewHome() {
   activity.sort((a, b) => (a.date < b.date ? 1 : -1));
 
   return `<div class="home-head">
-      <h1>${t('home.hello', { name: esc(first) })}</h1>
+      <h1>${S.store.kind === 'demo' || !first ? t('home.helloAnon') : t('home.hello', { name: esc(first) })}</h1>
       <p class="muted">${fmtLong(today)}</p>
     </div>
     <section class="card today-card ${todays.length ? 'done' : ''}">
@@ -1621,6 +1621,11 @@ const actions = {
     setLang(el.dataset.lang);
     fmtCache.clear();
     Timer.relabel();
+    if (S.store?.kind === 'demo') {
+      S.store.relabel();
+      S.me = S.store.me;
+      if (S.group) run(() => openGroup(S.group.id));
+    }
     render();
     if (S.sheet) renderSheet();
     if ($modal.open) settingsModal();

@@ -744,7 +744,8 @@ dialog[open] { animation: pop .18s ease-out; }
 .toast-btn { margin-left: 4px; height: 32px; padding: 0 12px; border: 0; border-radius: 9px; background: var(--accent-on-dark); color: var(--accent-on-dark-ink); font-weight: 700; }
 
 /* ============ Landing ============ */
-.landing { display: flex; flex-direction: column; min-height: 100svh; max-width: 1140px; margin: 0 auto; padding: var(--safe-t) 20px 0; }
+/* overflow-x: clip: decorative glows and the tilted mock can never cause sideways scrolling. */
+.landing { overflow-x: clip; display: flex; flex-direction: column; min-height: 100svh; max-width: 1140px; margin: 0 auto; padding: var(--safe-t) 20px 0; }
 .landing-top { display: flex; align-items: center; justify-content: space-between; height: 72px; }
 .brand { display: flex; align-items: center; gap: 10px; }
 .logo-mark { flex: none; display: block; }
@@ -766,6 +767,7 @@ dialog[open] { animation: pop .18s ease-out; }
   border: 1px solid #DADCE0; border-radius: 14px; background: #fff; color: #1F1F1F; font-size: 16px; font-weight: 600;
   box-shadow: var(--shadow-sm); transition: box-shadow .15s, transform .08s;
 }
+.btn-google, .btn-google span { min-width: 0; }
 .btn-google span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .btn-google:hover { box-shadow: 0 2px 10px rgb(0 0 0 / .15); }
 .btn-google:active { transform: scale(.98); }

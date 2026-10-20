@@ -37,7 +37,7 @@ function makeGroup() {
   const today = todayISO();
   const DAYS = 180;
   const entries = [];
-  const members = PEOPLE.map((p) => ({ email: p.email, name: p.name || t('demo.you'), picture: '', joined: addDays(today, -DAYS) }));
+  const members = PEOPLE.map((p) => ({ email: p.email, name: p.name || t('demo.you'), nameKey: p.name ? '' : 'demo.you', picture: '', joined: addDays(today, -DAYS) }));
   for (const p of PEOPLE) {
     let k = Math.floor(r() * 4);
     for (let d = DAYS; d >= 0; d--) {
@@ -67,13 +67,13 @@ function makeGroup() {
   const monthEnd = addDays(`${addDays(monthStart, 32).slice(0, 8)}01`, -1);
   const nextWeek = addDays(weekStart(today), 7);
   const challenges = [
-    { id: uid(), title: t('demo.ch1'), type: 'attendance', exercise: '', start: monthStart, end: monthEnd, createdBy: 'ana@demo.local' },
-    { id: uid(), title: t('demo.ch2'), type: 'improvement', exercise: 'Bench press', start: addDays(today, -42), end: addDays(today, 14), createdBy: 'pablo@demo.local' },
-    { id: uid(), title: t('demo.ch3'), type: 'volume', exercise: 'Squat', start: addDays(today, -150), end: addDays(today, -60), createdBy: 'tu@demo.local' },
-    { id: uid(), title: t('demo.ch5'), type: 'prs', exercise: '', start: addDays(today, -20), end: addDays(today, 10), createdBy: 'marcos@demo.local' },
-    { id: uid(), title: t('demo.ch4'), type: 'volume', exercise: '', start: nextWeek, end: addDays(nextWeek, 6), createdBy: 'lucia@demo.local' },
+    { id: uid(), titleKey: 'demo.ch1', type: 'attendance', exercise: '', start: monthStart, end: monthEnd, createdBy: 'ana@demo.local' },
+    { id: uid(), titleKey: 'demo.ch2', type: 'improvement', exercise: 'Bench press', start: addDays(today, -42), end: addDays(today, 14), createdBy: 'pablo@demo.local' },
+    { id: uid(), titleKey: 'demo.ch3', type: 'volume', exercise: 'Squat', start: addDays(today, -150), end: addDays(today, -60), createdBy: 'tu@demo.local' },
+    { id: uid(), titleKey: 'demo.ch5', type: 'prs', exercise: '', start: addDays(today, -20), end: addDays(today, 10), createdBy: 'marcos@demo.local' },
+    { id: uid(), titleKey: 'demo.ch4', type: 'volume', exercise: '', start: nextWeek, end: addDays(nextWeek, 6), createdBy: 'lucia@demo.local' },
   ];
-  return { id: 'demo', name: t('demo.groupName'), url: '', members, entries, challenges, exercises: [] };
+  return { id: 'demo', nameKey: 'demo.groupName', name: '', url: '', members, entries, challenges, exercises: [] };
 }
 
 export class DemoStore {
@@ -82,6 +82,17 @@ export class DemoStore {
   constructor() {
     this.me = { email: 'tu@demo.local', name: t('demo.you'), picture: '' };
     this.groups = [makeGroup()];
+    this.relabel();
+  }
+
+  /** Re-applies translated texts (your name, group name, challenge titles) after a language change. */
+  relabel() {
+    this.me.name = t('demo.you');
+    for (const g of this.groups) {
+      if (g.nameKey) g.name = t(g.nameKey);
+      for (const m of g.members) if (m.nameKey) m.name = t(m.nameKey);
+      for (const c of g.challenges) if (c.titleKey) c.title = t(c.titleKey);
+    }
   }
 
   #get(id) {
