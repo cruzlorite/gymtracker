@@ -109,12 +109,23 @@ export function prs(entries) {
 /** A participant's value in a challenge (null = not enough data). */
 export function challengeValue(ch, entries) {
   const r = { from: ch.start, to: ch.end };
+  const ex = ch.exercise || null;
+  // Logged sets in the challenge window (and of its exercise, if it has one).
+  const sets = entries.filter((e) => inRange(e, r) && e.exercise && (!ex || e.exercise === ex));
   switch (ch.type) {
     case 'attendance': return attendance(entries, r);
-    case 'volume': return volume(entries, r, ch.exercise || null);
+    case 'volume': return volume(entries, r, ex);
     case 'improvement': {
-      const s = improvement(entries, r, ch.exercise || null).score;
+      const s = improvement(entries, r, ex).score;
       return s == null ? null : s * 100;
+    }
+    case 'sets': return sets.reduce((a, e) => a + (+e.sets || 1), 0);
+    case 'reps': return sets.reduce((a, e) => a + (+e.sets || 1) * (+e.reps || 0), 0);
+    case 'maxWeight': return sets.length ? Math.max(...sets.map((e) => +e.weight || 0)) : null;
+    case 'prs': {
+      // Records are judged against the whole history, then counted inside the window.
+      const ids = prIds(entries);
+      return sets.filter((e) => ids.has(e.id)).length;
     }
     default: return null;
   }
@@ -199,20 +210,4 @@ export function exerciseSummary(entries, exercise) {
     sessions: sessions.length,
     sets: es.reduce((a, e) => a + (+e.sets || 1), 0),
   };
-}
-
-export const REP_TARGETS = [1, 2, 3, 4, 5, 6, 8, 10, 12, 15];
-
-/**
- * Rep records: for each target N, the heaviest weight actually lifted for at least N reps, plus the
- * weight the best estimated 1RM predicts for N reps (Epley, inverted). Estimates beyond ~10 reps are rough.
- */
-export function repRecords(entries, exercise) {
-  const es = entries.filter((e) => e.exercise === exercise && (+e.weight || 0) > 0 && (+e.reps || 0) > 0);
-  const top = es.reduce((a, e) => Math.max(a, e1rm(e.weight, e.reps)), 0);
-  return REP_TARGETS.map((n) => {
-    let actual = null;
-    for (const e of es) if (+e.reps >= n && (!actual || +e.weight > +actual.weight)) actual = e;
-    return { reps: n, actual, estimate: top ? (n === 1 ? top : top / (1 + n / 30)) : 0 };
-  });
 }

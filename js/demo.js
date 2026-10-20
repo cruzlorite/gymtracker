@@ -70,6 +70,7 @@ function makeGroup() {
     { id: uid(), title: t('demo.ch1'), type: 'attendance', exercise: '', start: monthStart, end: monthEnd, createdBy: 'ana@demo.local' },
     { id: uid(), title: t('demo.ch2'), type: 'improvement', exercise: 'Bench press', start: addDays(today, -42), end: addDays(today, 14), createdBy: 'pablo@demo.local' },
     { id: uid(), title: t('demo.ch3'), type: 'volume', exercise: 'Squat', start: addDays(today, -150), end: addDays(today, -60), createdBy: 'tu@demo.local' },
+    { id: uid(), title: t('demo.ch5'), type: 'prs', exercise: '', start: addDays(today, -20), end: addDays(today, 10), createdBy: 'marcos@demo.local' },
     { id: uid(), title: t('demo.ch4'), type: 'volume', exercise: '', start: nextWeek, end: addDays(nextWeek, 6), createdBy: 'lucia@demo.local' },
   ];
   return { id: 'demo', name: t('demo.groupName'), url: '', members, entries, challenges, exercises: [] };
@@ -100,7 +101,7 @@ export class DemoStore {
   async join() {}
 
   async loadGroup(id) {
-    return { ...structuredClone(this.#get(id)), isMember: true, canShare: true, ownerName: t('demo.you'), suspicious: [] };
+    return { ...structuredClone(this.#get(id)), isMember: true, isOwner: true, canShare: true, ownerName: t('demo.you'), suspicious: [] };
   }
 
   async addEntries(id, rows) { this.#get(id).entries.push(...rows.map((e) => ({ ...e, email: this.me.email }))); }
@@ -119,5 +120,32 @@ export class DemoStore {
 
   async addExercise(id, ex) { this.#get(id).exercises.push(ex); }
 
-  async invite() {}
+  async invite(id, email) {
+    const g = this.#get(id);
+    g.invited ||= [];
+    if (!g.invited.includes(email)) g.invited.push(email.trim().toLowerCase());
+  }
+
+  async listPermissions(id) {
+    const g = this.#get(id);
+    return [
+      ...g.members.map((m) => ({ id: `p-${m.email}`, email: m.email, name: m.name, role: m.email === this.me.email ? 'owner' : 'writer' })),
+      ...(g.invited || []).map((email) => ({ id: `p-${email}`, email, name: '', role: 'writer' })),
+    ];
+  }
+
+  async revoke(id, permissionId) {
+    const g = this.#get(id);
+    g.invited = (g.invited || []).filter((e) => `p-${e}` !== permissionId);
+  }
+
+  async removeMember(id, email) {
+    const g = this.#get(id);
+    g.members = g.members.filter((m) => m.email !== email);
+    g.entries = g.entries.filter((e) => e.email !== email);
+  }
+
+  async renameGroup(id, name) { this.#get(id).name = name; }
+
+  async deleteGroup(id) { this.groups = this.groups.filter((g) => g.id !== id); }
 }

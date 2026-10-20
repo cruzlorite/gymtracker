@@ -174,7 +174,7 @@ const num = (v) => {
   const n = parseFloat(String(v ?? '').replace(',', '.'));
   return Number.isFinite(n) ? n : 0;
 };
-const CH_TYPES = new Set(['attendance', 'volume', 'improvement']);
+const CH_TYPES = new Set(['attendance', 'volume', 'improvement', 'sets', 'reps', 'maxWeight', 'prs']);
 const entryRow = (e) => [e.id, e.date, e.exercise, e.sets, e.reps, e.weight, e.notes || ''];
 
 /** Google profile pictures only: an arbitrary URL in _members would reveal the IP of everyone opening the app. */
@@ -371,6 +371,7 @@ export class SheetStore {
       url: sheetUrl(id),
       members, entries, challenges, exercises,
       isMember: tabEmails.has(this.me.email),
+      isOwner: Boolean(file.ownedByMe),
       canShare: Boolean(file.capabilities?.canShare),
       ownerName: file.owners?.[0]?.displayName || '',
       suspicious: suspicious.map((x) => x.title),
@@ -437,6 +438,48 @@ export class SheetStore {
       this.meta.set(id, { ...this.meta.get(id), hasExercises: true });
     }
     await append(id, TAB.exercises, [[ex.name, ex.cat, this.me.email]]);
+  }
+
+  /** People with access to the group's sheet (only the owner sees the full list). */
+  async listPermissions(id) {
+    const r = await api(`${DRIVE}/${id}/permissions`, { query: { fields: 'permissions(id,type,role,emailAddress,displayName)' } });
+    return (r.permissions || []).filter((p) => p.type === 'user' && p.emailAddress)
+      .map((p) => ({ id: p.id, email: p.emailAddress.toLowerCase(), name: p.displayName || '', role: p.role }));
+  }
+
+  /** Revokes someone's access to the sheet (cancels a pending invitation). */
+  async revoke(id, permissionId) {
+    try {
+      await api(`${DRIVE}/${id}/permissions/${permissionId}`, { method: 'DELETE' });
+    } catch (e) {
+      if (e.status !== 404) throw e; // already gone
+    }
+  }
+
+  /** Removes a member: revokes their access, deletes their tab and their row in _members. Owner only. */
+  async removeMember(id, email, permissionId) {
+    if (permissionId) await this.revoke(id, permissionId);
+    const { tabs } = await this.tabs(id);
+    const requests = [];
+    const tab = tabs.find((x) => x.title.toLowerCase() === email);
+    if (tab) requests.push({ deleteSheet: { sheetId: tab.sheetId } });
+    const membersTab = tabs.find((x) => x.title === TAB.members);
+    const r = await api(`${SHEETS}/${id}/values/${enc(`${TAB.members}!A:A`)}`);
+    const rows = (r.values || []).flatMap((row, i) => (i > 0 && String(row[0]).toLowerCase() === email ? [i] : []));
+    // Bottom-up, so deleting one row doesn't shift the next ones.
+    for (const i of rows.reverse()) {
+      requests.push({ deleteDimension: { range: { sheetId: membersTab.sheetId, dimension: 'ROWS', startIndex: i, endIndex: i + 1 } } });
+    }
+    if (requests.length) await api(`${SHEETS}/${id}:batchUpdate`, { method: 'POST', body: { requests } });
+  }
+
+  renameGroup(id, name) {
+    return api(`${DRIVE}/${id}`, { method: 'PATCH', body: { name: TITLE_PREFIX + name } });
+  }
+
+  /** Moves the sheet to the owner's Drive trash, where it can be recovered for 30 days. */
+  deleteGroup(id) {
+    return api(`${DRIVE}/${id}`, { method: 'PATCH', body: { trashed: true } });
   }
 
   /** Shares the sheet from the user's Drive. Google sends the invitation email with the link. */

@@ -14,7 +14,7 @@ const $toast = document.getElementById('toast');
 
 const COLORS = ['#5B8DEF', '#F2994A', '#27AE60', '#E056A0', '#9B51E0', '#2DCCD3', '#EB5757', '#F2C94C'];
 const TABS = [['log', 'dumbbell'], ['history', 'calendar'], ['progress', 'chart'], ['group', 'users']];
-const CH_TYPES = ['attendance', 'volume', 'improvement'];
+const CH_TYPES = ['attendance', 'volume', 'improvement', 'sets', 'reps', 'maxWeight', 'prs'];
 const REST_OPTIONS = [60, 90, 120, 150, 180, 240];
 const STEP_OPTIONS = [1, 1.25, 2.5, 5];
 
@@ -149,6 +149,7 @@ function saveCache() {
   if (S.store?.kind !== 'google' || !S.me) return;
   ls.set(SESSION_KEY, JSON.stringify({ me: S.me }));
   if (S.group?.isMember) ls.set(cacheKey(S.me.email), JSON.stringify({ groups: S.groups, group: S.group }));
+  else ls.set(cacheKey(S.me.email), JSON.stringify({ groups: S.groups, group: null }));
 }
 
 function clearCache() {
@@ -272,6 +273,7 @@ function landing() {
     </header>
     <section class="hero">
       <div class="hero-copy">
+        <p class="hero-badge">${icon('lock')} ${t('landing.badge')}</p>
         <h1>${t('landing.title')}</h1>
         <p class="lead">${t('landing.lead')}</p>
         ${S.pendingGroup ? `<p class="pill-note">${icon('userPlus')} ${t('landing.invited')}</p>` : ''}
@@ -282,18 +284,63 @@ function landing() {
           <button class="btn ghost lg" data-action="demo">${t('landing.demo')}</button>
         </div>
         ${configured ? `<p class="fine">${icon('shield')} ${t('landing.driveHint')}</p>` : ''}
+        ${installBanner()}
       </div>
       <div class="hero-visual" aria-hidden="true">${heroMock()}</div>
     </section>
-    <section class="features">
-      ${[['dumbbell', 'f1'], ['timer', 'f2'], ['users', 'f3']].map(([ic, k]) => `<article class="feature">
-        <span class="feature-ic">${icon(ic)}</span><h3>${t(`landing.${k}.title`)}</h3><p>${t(`landing.${k}.text`)}</p></article>`).join('')}
+    <section class="showcase">
+      <h2>${t('landing.showcase')}</h2>
+      <div class="feat-grid">${FEATURES.map((k) => `<article class="feat">
+        <div class="feat-visual" aria-hidden="true">${featureVisual(k)}</div>
+        <div class="feat-body"><h3>${t(`landing.${k}.title`, { n: Ex.librarySize() })}</h3><p>${t(`landing.${k}.text`, { n: Ex.librarySize() })}</p></div>
+      </article>`).join('')}</div>
+    </section>
+    <section class="privacy-band">
+      <div class="privacy-copy">
+        <p class="eyebrow">${icon('lock')} ${t('landing.privacy.eyebrow')}</p>
+        <h2>${t('landing.privacy.title')}</h2>
+        <p class="lead">${t('landing.privacy.lead')}</p>
+        <ul class="checks">${['p1', 'p2', 'p3', 'p4', 'p5'].map((k) => `<li>${icon('check')}<span>${t(`landing.privacy.${k}`)}</span></li>`).join('')}</ul>
+      </div>
+      <div class="flow" aria-label="${t('landing.privacy.diagram')}">
+        <div class="node">${icon('phone')}<strong>${t('landing.privacy.you')}</strong><span>${t('landing.privacy.youSub')}</span></div>
+        <div class="link"><i></i><span>${t('landing.privacy.direct')}</span><i></i></div>
+        <div class="node google">${icon('sheet')}<strong>${t('landing.privacy.sheets')}</strong><span>${t('landing.privacy.sheetsSub')}</span></div>
+        <div class="node none">${icon('server')}<strong>${t('landing.privacy.server')}</strong><span class="none-badge">${t('landing.privacy.serverNone')}</span></div>
+      </div>
     </section>
     <footer class="landing-foot">
       <span>${t('landing.noServer')}</span>
       <span><a href="privacy.html">${t('common.privacy')}</a> · <a href="https://github.com/cruzlorite/gymtracker" target="_blank" rel="noopener">GitHub</a></span>
     </footer>
   </main>`;
+}
+
+// Landing feature cards, each with a small decorative mock of the real UI.
+const FEATURES = ['log', 'timer', 'ranking', 'progress', 'library', 'offline'];
+
+function featureVisual(k) {
+  switch (k) {
+    case 'log': return `<div class="mini-log">
+      <div class="mini-step"><i>${icon('minus')}</i><b>${fmtN(82.5, 1)}</b><i>${icon('plus')}</i></div>
+      <div class="mini-step"><i>${icon('minus')}</i><b>6</b><i>${icon('plus')}</i></div>
+      <div class="mini-save">${icon('check')} ${t('ex.save')}</div></div>`;
+    case 'timer': return `<div class="mini-timer"><div style="width:58%"></div>
+      <span>${icon('timer')} ${t('timer.rest')}</span><b>1:24</b><em>−15</em><em>+15</em></div>`;
+    case 'ranking': return `<ol class="mini-board">${[['Ana', 18, '#5B8DEF'], [t('common.you'), 16, '#E056A0'], ['Pablo', 12, '#F2994A']].map(([n, v, c], i) =>
+      `<li><span class="pos p${i + 1}">${i + 1}</span><span class="av" style="--c:${c}">${esc(n[0])}</span><span>${esc(n)}</span><span class="bar"><i style="width:${v / 18 * 100}%;background:${c}"></i></span><b>${t('unit.days', { n: v })}</b></li>`).join('')}</ol>`;
+    case 'progress': return `<div class="mini-chart">
+      <svg viewBox="0 0 220 90" preserveAspectRatio="none"><path class="area" d="M0 78 L30 70 L60 72 L90 58 L120 52 L150 44 L180 30 L220 22 L220 90 L0 90Z"/><path class="line" d="M0 78 L30 70 L60 72 L90 58 L120 52 L150 44 L180 30 L220 22"/><circle cx="220" cy="22" r="4"/></svg>
+      <span class="mini-pr">${icon('trophy')} ${t('metric.e1rm')} · 105 kg</span></div>`;
+    case 'library': return `<div class="mini-lib">
+      <div class="mini-search">${icon('search')} rdl</div>
+      ${['Romanian deadlift', 'Dumbbell Romanian deadlift', 'Single-leg Romanian deadlift'].map((n) => `<div class="mini-row"><span class="cat-dot" style="--c:#1A9C8C"></span>${esc(Ex.exName(n))}</div>`).join('')}</div>`;
+    case 'offline': return `<div class="mini-offline">
+      <span class="sync warn">${icon('wifiOff')} ${t('landing.offline.pill1')}</span>
+      <span class="mini-arrow">${icon('down')}</span>
+      <span class="sync connect">${icon('check')} ${t('landing.offline.pill2')}</span></div>`;
+    default: return '';
+  }
 }
 
 /** Decorative mock of the logging screen for the landing page. */
@@ -420,7 +467,6 @@ function viewLog() {
         <h2>${day === today ? t('log.emptyToday') : t('log.emptyDay')}</h2>
         <p>${t('log.emptyText')}</p>
         <button class="btn primary lg" data-action="add-ex">${icon('plus')} ${t('log.addExercise')}</button>
-        <button class="btn ghost" data-action="mark-attendance">${icon('check')} ${t('log.markAttendance')}</button>
       </section>
       ${prevEx.length ? `<section class="card repeat">
         <h3>${icon('repeat')} ${t('log.repeat', { day: df({ weekday: 'long', day: 'numeric', month: 'long' }).format(St.parseISO(prevDate)) })}</h3>
@@ -438,7 +484,8 @@ function viewLog() {
         const cat = Ex.categoryOf(name);
         return `<article class="ex-card" role="button" tabindex="0" data-action="open-ex" data-name="${esc(name)}">
           <header><span class="cat-dot" style="--c:${cat.color}"></span><h3>${esc(Ex.exName(name))}</h3>
-            <span class="ex-meta">${t('log.sets', { n: list.reduce((a, e) => a + (e.sets || 1), 0) })}</span>${icon('right', 'chev')}</header>
+            <span class="ex-meta">${t('log.sets', { n: list.reduce((a, e) => a + (e.sets || 1), 0) })}</span>
+            <button class="icon-btn sm card-del" data-action="del-exercise" data-name="${esc(name)}" aria-label="${t('log.deleteExercise', { name: esc(Ex.exName(name)) })}">${icon('trash')}</button>${icon('right', 'chev')}</header>
           <ol class="sets">${list.map((e, i) => `<li>${setLine(e, i, prs)}</li>`).join('')}</ol>
         </article>`;
       }).join('')}
@@ -446,7 +493,7 @@ function viewLog() {
         <button class="icon-btn sm" data-action="del-entry" data-id="${esc(e.id)}" aria-label="${t('common.delete')}">${icon('trash')}</button></div>`).join('')}
       </div>`;
   }
-  return `${nav}${body}
+  return `${installBanner()}${nav}${body}
     ${es.length ? `<button class="fab" data-action="add-ex">${icon('plus')}<span>${t('log.addExercise')}</span></button>` : ''}`;
 }
 
@@ -518,14 +565,13 @@ function periodChips() {
     `<button class="${S.period === k ? 'on' : ''}" data-action="period" data-p="${k}">${t(`period.${k}`)}</button>`).join('')}</div>`;
 }
 
-function metricChips(name) {
+function metricChips(name, current = metricFor(name), action = 'metric') {
   const weighted = hasWeight(name);
-  const current = metricFor(name);
   return `<div class="seg" role="group" aria-label="${t('metric.label')}">${St.METRICS.map((k) =>
-    `<button class="${current === k ? 'on' : ''}" data-action="metric" data-m="${k}" ${!weighted && k !== 'reps' ? 'disabled' : ''}>${t(`metric.${k}`)}</button>`).join('')}</div>`;
+    `<button class="${current === k ? 'on' : ''}" data-action="${action}" data-m="${k}" ${!weighted && k !== 'reps' ? 'disabled' : ''}>${t(`metric.${k}`)}</button>`).join('')}</div>`;
 }
 
-/** My bests and rep records (1RM, 3RM, 5RM…) for one exercise. Shared by Progress and the exercise sheet. */
+/** My all-time bests for one exercise. Shared by Progress and the exercise sheet. */
 function recordsBlock(name) {
   const sum = St.exerciseSummary(mine(), name);
   if (!sum) return `<p class="muted">${t('ex.noHistory')}</p>`;
@@ -539,22 +585,12 @@ function recordsBlock(name) {
       ${tile(t('ex.sessions'), fmtN(sum.sessions))}
     </div>`;
   }
-  const rows = St.repRecords(mine(), name);
   return `<div class="tiles">
       ${tile(t('metric.e1rm'), `${fmtN(sum.e1rm.value, 1)} kg`, sum.e1rm.date, set(sum.e1rm.set))}
       ${tile(t('metric.weight'), fmtW(sum.weight.value), sum.weight.date, `× ${fmtN(sum.weight.set.reps)}`)}
       ${tile(t('records.bestSet'), fmtKg(sum.bestSet.value), sum.bestSet.date, set(sum.bestSet.set))}
       ${tile(t('records.bestSession'), fmtKg(sum.sessionVolume.value), sum.sessionVolume.date)}
-    </div>
-    <table class="table rep-table">
-      <thead><tr><th>${t('records.reps')}</th><th class="r">${t('records.actual')}</th><th class="r">${t('records.estimated')}</th></tr></thead>
-      <tbody>${rows.map(({ reps, actual, estimate }) => `<tr>
-        <td><strong>${reps}RM</strong></td>
-        <td class="r">${actual ? `${set(actual)} <span class="muted">· ${fmtDate(actual.date)}</span>` : '<span class="muted">—</span>'}</td>
-        <td class="r muted">${fmtN(estimate, 1)} kg</td>
-      </tr>`).join('')}</tbody>
-    </table>
-    <p class="fine">${t('records.help')}</p>`;
+    </div>`;
 }
 
 function viewProgress() {
@@ -610,7 +646,7 @@ function mountChart() {
   const css = getComputedStyle(document.documentElement);
   const text = css.getPropertyValue('--muted').trim();
   const grid = css.getPropertyValue('--line').trim();
-  const accent = css.getPropertyValue('--accent').trim();
+  const accent = css.getPropertyValue('--accent-text').trim();
   const r = St.periodRange(S.period);
   const metric = metricFor(S.exercise);
   const who = S.compare ? members() : members().filter((m) => m.email === S.me.email);
@@ -625,7 +661,15 @@ function mountChart() {
       pointRadius: 2.5, pointHoverRadius: 5, borderWidth: me ? 3 : 2,
     };
   }).filter((d) => d.data.length);
-  S.chart = new window.Chart(canvas, {
+  S.chart = drawChart(canvas, datasets, metric, S.compare);
+}
+
+/** A line chart over time for one metric, styled from the current theme. */
+function drawChart(canvas, datasets, metric, legend) {
+  const css = getComputedStyle(document.documentElement);
+  const text = css.getPropertyValue('--muted').trim();
+  const grid = css.getPropertyValue('--line').trim();
+  return new window.Chart(canvas, {
     type: 'line',
     data: { datasets },
     options: {
@@ -636,7 +680,7 @@ function mountChart() {
         y: { ticks: { color: text, callback: (v) => fmtMetric(metric, v, 0) }, grid: { color: grid } },
       },
       plugins: {
-        legend: { display: S.compare, labels: { color: text, usePointStyle: true, boxWidth: 8 } },
+        legend: { display: legend, labels: { color: text, usePointStyle: true, boxWidth: 8 } },
         tooltip: { callbacks: {
           title: (items) => cap(df({ weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(items[0].parsed.x))),
           label: (it) => ` ${it.dataset.label}: ${fmtMetric(metric, it.parsed.y)}`,
@@ -645,6 +689,56 @@ function mountChart() {
     },
   });
 }
+
+/** Metric for the exercise sheet's own chart (bodyweight-only exercises: reps). */
+const sheetMetric = (name) => (hasWeight(name) ? S.sheet.metric || 'e1rm' : 'reps');
+
+function sheetRecordsView(name) {
+  if (!mine().some((e) => e.exercise === name)) return `<p class="muted pad">${t('ex.noHistory')}</p>`;
+  const metric = sheetMetric(name);
+  return `${recordsBlock(name)}
+    <div class="toolbar sheet-metrics">${metricChips(name, metric, 'sheet-metric')}</div>
+    <div class="card chart-card"><div class="chart-box sm"><canvas id="sheet-chart" aria-label="${t(`metric.${metric}`)}"></canvas></div>
+      <p class="fine">${t(`metric.${metric}.help`)}</p></div>
+    <button class="btn ghost block" data-action="ex-chart">${icon('users')} ${t('ex.compareGroup')}</button>`;
+}
+
+function mountSheetChart() {
+  const canvas = document.getElementById('sheet-chart');
+  if (!canvas || !window.Chart) return;
+  const name = S.sheet.name;
+  const metric = sheetMetric(name);
+  const color = getComputedStyle(document.documentElement).getPropertyValue('--accent-text').trim();
+  const data = St.dailySeries(mine(), name, metric).filter((p) => p.value > 0)
+    .map((p) => ({ x: +St.parseISO(p.date), y: Math.round(p.value * 10) / 10 }));
+  S.sheetChart = drawChart(canvas, [{
+    label: S.me.name, data, borderColor: color, backgroundColor: color, tension: 0.3, pointRadius: 3, pointHoverRadius: 5, borderWidth: 3,
+  }], metric, false);
+}
+
+// ---------- "Install as app" prompt ----------
+// Android/Chrome hands us an install event we can trigger from a button; iOS has no such API,
+// so it gets the manual steps (Share → Add to Home Screen). Dismissing hides it for two weeks.
+let installEvent = null;
+const INSTALL_KEY = 'gt:installDismissed';
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+function installBanner() {
+  if (isStandalone() || Date.now() - Number(ls.get(INSTALL_KEY) || 0) < 14 * 864e5) return '';
+  const close = `<button class="icon-btn sm" data-action="install-dismiss" aria-label="${t('common.close')}">${icon('x')}</button>`;
+  if (installEvent) {
+    return `<div class="install-card">${logo(40)}<div class="install-text"><strong>${t('install.title')}</strong><p>${t('install.android')}</p></div>
+      <div class="install-actions"><button class="btn primary sm" data-action="install">${t('install.button')}</button>${close}</div></div>`;
+  }
+  if (isIOS()) {
+    return `<div class="install-card">${logo(40)}<div class="install-text"><strong>${t('install.title')}</strong>
+      <p>${t('install.ios', { share: icon('share', 'inline') })}</p></div><div class="install-actions">${close}</div></div>`;
+  }
+  return '';
+}
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvent = e; render(); });
+window.addEventListener('appinstalled', () => { installEvent = null; render(); });
 
 // ---------- Group ----------
 function board(title, sub, rows, get, fmt, { note = '', allowNeg = false } = {}) {
@@ -672,6 +766,7 @@ function viewGroup() {
   const head = `<div class="view-head">
       <h1>${esc(S.group.name)}</h1>
       <button class="btn ghost" data-action="invite">${icon('userPlus')} ${t('group.invite')}</button>
+      <button class="icon-btn" data-action="group-settings" aria-label="${t('gs.title')}">${icon('settings')}</button>
     </div>
     <div class="seg wide" role="tablist">${tabs.map((k) => `<button role="tab" class="${S.groupTab === k ? 'on' : ''}" aria-selected="${S.groupTab === k}" data-action="group-tab" data-v="${k}">${t(`group.${k}`)}</button>`).join('')}</div>`;
   if (S.groupTab === 'challenges') return head + viewChallenges();
@@ -709,7 +804,15 @@ function viewChallenges() {
   const order = { live: 0, upcoming: 1, finished: 2 };
   const list = [...S.group.challenges].map((c) => ({ c, st: challengeStatus(c) }))
     .sort((a, b) => order[a.st.key] - order[b.st.key] || b.c.start.localeCompare(a.c.start));
-  const fmt = (type, v) => (type === 'attendance' ? t('unit.days', { n: fmtN(v) }) : type === 'volume' ? fmtKg(v) : `${v > 0 ? '+' : ''}${fmtN(v, 1)} %`);
+  const fmt = (type, v) => ({
+    attendance: () => t('unit.days', { n: fmtN(v) }),
+    volume: () => fmtKg(v),
+    improvement: () => `${v > 0 ? '+' : ''}${fmtN(v, 1)} %`,
+    sets: () => t('unit.sets', { n: fmtN(v) }),
+    reps: () => t('unit.reps', { n: fmtN(v) }),
+    maxWeight: () => fmtW(v),
+    prs: () => t('unit.prs', { n: fmtN(v) }),
+  }[type] || (() => fmtN(v)))();
   return `<div class="toolbar"><span class="spacer"></span><button class="btn primary" data-action="new-challenge">${icon('plus')} ${t('ch.new')}</button></div>
     ${list.length ? '' : emptyState('flag', t('ch.emptyTitle'), t('ch.emptyText'))}
     <div class="grid">${list.map(({ c, st }) => {
@@ -804,6 +907,7 @@ window.addEventListener('popstate', () => {
 
 function renderSheet() {
   document.body.classList.toggle('sheet-open', Boolean(S.sheet));
+  if (S.sheetChart) { S.sheetChart.destroy(); S.sheetChart = null; }
   if (!S.sheet) { $sheet.className = ''; $sheet.innerHTML = ''; return; }
   $sheet.className = 'open';
   const html = S.sheet.kind === 'picker' ? pickerSheet() : exerciseSheet();
@@ -811,6 +915,7 @@ function renderSheet() {
   const panel = $sheet.querySelector('.sheet-panel');
   if (panel) panel.innerHTML = html;
   else $sheet.innerHTML = `<div class="sheet-panel" role="dialog" aria-modal="true">${html}</div>`;
+  if (S.sheet.kind === 'exercise' && S.sheet.view === 'records') mountSheetChart();
   if (S.sheet.kind === 'picker') {
     const q = document.getElementById('picker-q');
     if (q && matchMedia('(hover: hover)').matches) q.focus();
@@ -907,7 +1012,7 @@ function exerciseSheet() {
     <div class="seg wide">${['log', 'history', 'records'].map((v) =>
       `<button class="${sh.view === v ? 'on' : ''}" data-action="ex-view" data-v="${v}">${t(`ex.${v}`)}</button>`).join('')}</div>
     <div class="sheet-body">${sh.view === 'history' ? exerciseHistoryView(name)
-      : sh.view === 'records' ? `${recordsBlock(name)}<button class="btn ghost block see-chart" data-action="ex-chart">${icon('chart')} ${t('ex.seeChart')}</button>`
+      : sh.view === 'records' ? sheetRecordsView(name)
         : exerciseLogView(name)}</div>`;
 }
 
@@ -951,7 +1056,8 @@ function exerciseLogView(name) {
     </section>` : ''}
     <section class="today-sets">
       <h3>${S.day === St.todayISO() ? t('ex.todaySets') : t('ex.daySets')} ${todays.length ? `<span class="count">${todays.length}</span>` : ''}</h3>
-      ${todays.length ? `<ol class="sets big">${todays.map((e, i) => `<li><button class="set-btn ${sh.edit === e.id ? 'on' : ''}" data-action="edit-set" data-id="${esc(e.id)}">${setLine(e, i, prs)}</button></li>`).join('')}</ol>`
+      ${todays.length ? `<ol class="sets big">${todays.map((e, i) => `<li><button class="set-btn ${sh.edit === e.id ? 'on' : ''}" data-action="edit-set" data-id="${esc(e.id)}">${setLine(e, i, prs)}</button></li>`).join('')}</ol>
+        <button class="btn ghost danger-text block del-all" data-action="del-exercise" data-name="${esc(name)}">${icon('trash')} ${t('ex.deleteAll')}</button>`
         : `<p class="muted">${t('ex.noSetsYet')}</p>`}
     </section>`;
 }
@@ -1124,7 +1230,13 @@ function challengeModal() {
   openModal(`${modalHead(t('ch.new'))}
     <form data-form="challenge">
       <label class="field"><span>${t('ch.titleLabel')}</span><input name="title" required maxlength="80" placeholder="${t('ch.titlePlaceholder')}" autofocus></label>
-      <label class="field"><span>${t('ch.type')}</span><div class="select-wrap"><select name="type">${CH_TYPES.map((k) => `<option value="${k}">${t(`ch.${k}`)} — ${t(`ch.${k}.help`)}</option>`).join('')}</select>${icon('down')}</div></label>
+      <fieldset class="field">
+        <legend class="legend-row">${t('ch.type')}
+          <button type="button" class="info-btn" data-action="toggle-info" aria-expanded="false" aria-controls="ch-type-help" aria-label="${t('ch.typesHelp')}">${icon('info')}</button>
+        </legend>
+        <div class="chips type-chips" role="radiogroup">${CH_TYPES.map((k, i) => `<label class="chip radio"><input type="radio" name="type" value="${k}" ${i === 0 ? 'checked' : ''}>${t(`ch.${k}`)}</label>`).join('')}</div>
+        <dl class="info-box" id="ch-type-help" hidden>${CH_TYPES.map((k) => `<dt>${t(`ch.${k}`)}</dt><dd>${t(`ch.${k}.help`)}</dd>`).join('')}</dl>
+      </fieldset>
       <label class="field"><span>${t('ch.exercise')}</span><div class="select-wrap"><select name="exercise"><option value="">${t('ch.allExercises')}</option>${exs.map((x) => `<option value="${esc(x)}">${esc(Ex.exName(x))}</option>`).join('')}</select>${icon('down')}</div></label>
       <div class="two"><label class="field"><span>${t('ch.start')}</span><input type="date" name="start" value="${today}" required></label>
       <label class="field"><span>${t('ch.end')}</span><input type="date" name="end" value="${St.addDays(today, 29)}" required></label></div>
@@ -1156,12 +1268,72 @@ function groupMenu() {
         <span>${esc(x.name)}</span>${x.owner ? `<span class="muted">${t('group.of', { owner: esc(x.owner) })}</span>` : ''}${x.id === g?.id ? icon('check') : ''}</button></li>`).join('')}
     </ul>
     <div class="menu-actions">
-      ${g?.isMember ? `<button class="btn ghost" data-action="invite">${icon('userPlus')} ${t('group.invite')}</button>` : ''}
+      ${g?.isMember ? `<button class="btn ghost" data-action="invite">${icon('userPlus')} ${t('group.invite')}</button>
+        <button class="btn ghost" data-action="group-settings">${icon('settings')} ${t('gs.title')}</button>` : ''}
       ${g ? `<button class="btn ghost" data-action="refresh">${icon('refresh')} ${t('group.refresh')}</button>` : ''}
       <button class="btn ghost" data-action="create-group">${icon('plus')} ${t('groups.create')}</button>
       ${isGoogle ? `<button class="btn ghost" data-action="pick-any">${icon('sheet')} ${t('groups.pickShared')}</button>` : ''}
       ${g?.url ? `<a class="btn ghost" href="${esc(g.url)}" target="_blank" rel="noopener">${icon('external')} ${t('group.openSheet')}</a>` : ''}
     </div>`);
+}
+
+// ---------- group settings: rename, members, delete ----------
+let groupPerms = null; // Drive permissions of the open group, loaded when its settings open
+let pendingConfirm = null;
+
+function groupSettingsModal() {
+  const g = S.group;
+  const owner = g.isOwner;
+  const perms = groupPerms;
+  const memberRows = members().map((m) => {
+    const me = m.email === S.me.email;
+    const isOwnerRow = perms ? perms.some((p) => p.email === m.email && p.role === 'owner') : me && owner;
+    return `<li class="member-row">${avatar(m)}
+      <div class="member-info"><strong>${esc(m.name)}${me ? ` <span class="badge">${t('common.you')}</span>` : ''}</strong>
+        <span class="muted">${esc(m.email)} · ${isOwnerRow ? t('gs.owner') : t('gs.member')}</span></div>
+      ${owner && !me ? `<button class="icon-btn sm" data-action="member-remove" data-e="${esc(m.email)}" aria-label="${t('gs.removeLabel', { name: esc(m.name) })}">${icon('userMinus')}</button>` : ''}
+    </li>`;
+  }).join('');
+  const pending = (perms || []).filter((p) => p.role !== 'owner' && !members().some((m) => m.email === p.email));
+  openModal(`${modalHead(t('gs.title'))}
+    ${owner ? `<form data-form="rename-group" class="field"><span>${t('groups.name')}</span>
+      <div class="inline-form"><input name="name" value="${esc(g.name)}" maxlength="60" required aria-label="${t('groups.name')}"><button class="btn ghost">${t('common.save')}</button></div></form>` : ''}
+    <section>
+      <h3 class="list-head">${t('gs.members', { n: members().length })}</h3>
+      <ul class="member-list">${memberRows}</ul>
+    </section>
+    ${owner ? `<section>
+      <h3 class="list-head">${t('gs.pending')}</h3>
+      ${!perms ? `<p class="muted">${t('gs.loading')}</p>` : pending.length ? `<ul class="member-list">${pending.map((p) => `<li class="member-row">
+        <span class="av" style="--c:#8A8A93">${icon('userPlus')}</span>
+        <div class="member-info"><strong>${esc(p.name || p.email)}</strong><span class="muted">${esc(p.email)} · ${t('gs.pendingHint')}</span></div>
+        <button class="icon-btn sm" data-action="invite-cancel" data-id="${esc(p.id)}" aria-label="${t('gs.cancelInvite')}">${icon('x')}</button>
+      </li>`).join('')}</ul>` : `<p class="muted">${t('gs.noPending')}</p>`}
+      <button class="btn ghost block" data-action="invite">${icon('userPlus')} ${t('group.invite')}</button>
+    </section>
+    <div class="danger-zone">
+      <button class="btn ghost danger-text" data-action="group-delete">${icon('trash')} ${t('gs.delete')}</button>
+      <p class="fine">${t('gs.deleteNote')}</p>
+    </div>` : `<p class="fine">${t('gs.onlyOwner', { owner: `<strong>${esc(g.ownerName || t('group.creator'))}</strong>` })}</p>`}`);
+}
+
+function openGroupSettings() {
+  groupPerms = null;
+  groupSettingsModal();
+  if (!S.group.isOwner) return;
+  const gid = S.group.id;
+  S.store.listPermissions(gid).then((p) => {
+    groupPerms = p;
+    if ($modal.open && S.group?.id === gid && $modal.querySelector('.member-list')) groupSettingsModal();
+  }, (e) => toast(e.message, { error: true }));
+}
+
+/** Confirmation for irreversible actions. "Cancel" goes back to where it came from. */
+function confirmModal(title, text, yesLabel, onYes, onNo = closeModal) {
+  pendingConfirm = { onYes, onNo };
+  openModal(`${modalHead(title)}<p>${text}</p>
+    <footer class="modal-foot"><button class="btn ghost" data-action="confirm-no">${t('common.cancel')}</button>
+      <button class="btn danger-solid" data-action="confirm-yes">${yesLabel}</button></footer>`);
 }
 
 function createGroupModal() {
@@ -1196,9 +1368,32 @@ function armed(el, label) {
   return false;
 }
 
-function removeEntry(id) {
-  S.group.entries = S.group.entries.filter((e) => !(e.id === id && e.email === S.me.email));
-  S.outbox.remove(S.group.id, id);
+/** Deletes my entries by id and returns a function that puts them back where they were. */
+function removeEntries(ids) {
+  const gid = S.group.id;
+  const removed = [];
+  S.group.entries = S.group.entries.filter((e, i) => {
+    const hit = ids.includes(e.id) && e.email === S.me.email;
+    if (hit) removed.push([i, e]);
+    return !hit;
+  });
+  for (const id of ids) S.outbox.remove(gid, id);
+  return () => {
+    if (S.group?.id !== gid) return;
+    for (const [i, e] of removed) {
+      S.group.entries.splice(Math.min(i, S.group.entries.length), 0, e);
+      const { email, ...entry } = e;
+      S.outbox.add(gid, entry);
+    }
+    render();
+    if (S.sheet) renderSheet();
+  };
+}
+
+/** One tap deletes; the toast offers Undo for a few seconds instead of asking to confirm. */
+function deleteWithUndo(ids, message) {
+  const undo = removeEntries(ids);
+  toast(message, { ic: 'trash', action: t('common.undo'), onAction: undo });
 }
 
 const actions = {
@@ -1252,14 +1447,24 @@ const actions = {
   'close-modal': closeModal,
   'add-ex': () => openSheet({ kind: 'picker', q: '', cat: 'all' }),
   'open-ex': (el) => openExercise(el.dataset.name),
-  'mark-attendance': () => {
-    const entry = { id: uid(), date: S.day, exercise: '', sets: 0, reps: 0, weight: 0, notes: '' };
-    S.group.entries.push({ ...entry, email: S.me.email });
-    S.outbox.add(S.group.id, entry);
+  'del-entry': (el) => { deleteWithUndo([el.dataset.id], t('log.attendanceDeleted')); render(); },
+  'del-exercise': (el) => {
+    const name = el.dataset.name;
+    const ids = mine().filter((e) => e.exercise === name && e.date === S.day).map((e) => e.id);
+    if (!ids.length) return;
+    deleteWithUndo(ids, t('log.exerciseDeleted', { name: Ex.exName(name) }));
+    if (S.sheet) { S.sheet.edit = null; renderSheet(); }
     render();
-    toast(t('log.attendanceSaved'), { ic: 'check' });
   },
-  'del-entry': (el) => { if (armed(el, t('common.confirmDelete'))) { removeEntry(el.dataset.id); render(); } },
+  'sheet-metric': (el) => { S.sheet.metric = el.dataset.m; renderSheet(); },
+  install: () => {
+    const ev = installEvent;
+    if (!ev) return;
+    installEvent = null;
+    ev.prompt(); // straight from the click, as the browser requires
+    ev.userChoice.then((r) => { if (r.outcome !== 'accepted') ls.set(INSTALL_KEY, String(Date.now())); render(); });
+  },
+  'install-dismiss': () => { ls.set(INSTALL_KEY, String(Date.now())); render(); },
   'close-sheet': closeSheet,
   'picker-cat': (el) => { S.sheet.cat = el.dataset.cat; refreshPicker(); },
   pick: (el) => {
@@ -1286,10 +1491,10 @@ const actions = {
     if (S.sheet.edit) $sheet.querySelector('.sheet-panel')?.scrollTo({ top: 0, behavior: 'smooth' });
   },
   'cancel-edit': () => { S.sheet.edit = null; renderSheet(); },
-  'del-set': (el) => {
-    if (!armed(el, t('common.confirmDelete'))) return;
-    removeEntry(S.sheet.edit);
+  'del-set': () => {
+    const id = S.sheet.edit;
     S.sheet.edit = null;
+    deleteWithUndo([id], t('ex.setDeleted'));
     renderSheet();
   },
   'timer-settings': () => timerModal(),
@@ -1303,6 +1508,47 @@ const actions = {
   refresh: () => { closeModal(); run(() => openGroup(S.group.id)); },
   reconnect: () => reconnect(),
   'sync-error': () => syncErrorModal(),
+  'group-settings': () => openGroupSettings(),
+  'toggle-info': (el) => {
+    const box = document.getElementById(el.getAttribute('aria-controls'));
+    if (!box) return;
+    box.hidden = !box.hidden;
+    el.setAttribute('aria-expanded', String(!box.hidden));
+  },
+  'confirm-yes': () => { const c = pendingConfirm; pendingConfirm = null; closeModal(); c?.onYes(); },
+  'confirm-no': () => { const c = pendingConfirm; pendingConfirm = null; (c?.onNo || closeModal)(); },
+  'member-remove': (el) => {
+    const m = member(el.dataset.e);
+    if (!m) return;
+    const gid = S.group.id;
+    const perm = groupPerms?.find((p) => p.email === m.email);
+    confirmModal(t('gs.removeTitle', { name: esc(m.name) }), t('gs.removeText', { name: esc(m.name) }), t('gs.remove'),
+      () => run(async () => {
+        await S.store.removeMember(gid, m.email, perm?.id);
+        await openGroup(gid);
+        toast(t('gs.removed', { name: m.name }), { ic: 'check' });
+        openGroupSettings();
+      }), groupSettingsModal);
+  },
+  'invite-cancel': (el) => run(async () => {
+    await S.store.revoke(S.group.id, el.dataset.id);
+    groupPerms = (groupPerms || []).filter((p) => p.id !== el.dataset.id);
+    groupSettingsModal();
+    toast(t('gs.inviteCancelled'), { ic: 'check' });
+  }),
+  'group-delete': () => {
+    const g = S.group;
+    confirmModal(t('gs.deleteTitle', { name: esc(g.name) }), t('gs.deleteText'), t('gs.deleteYes'),
+      () => run(async () => {
+        await S.store.deleteGroup(g.id);
+        S.groups = await S.store.listGroups();
+        S.group = null;
+        const next = S.groups[0];
+        if (next) await openGroup(next.id);
+        else { saveCache(); render(); }
+        toast(t('gs.deleted'), { ic: 'trash' });
+      }), groupSettingsModal);
+  },
   'sync-retry': () => { closeModal(); S.outbox.flush(); },
   'sync-discard': (el) => {
     if (!armed(el, t('common.confirmDelete'))) return;
@@ -1370,6 +1616,20 @@ const forms = {
       saveCache();
       toast(t('newEx.created', { name: ex.name }), { ic: 'check' });
       open(ex.name);
+    });
+  },
+  'rename-group': (f) => {
+    const name = f.name.value.trim();
+    const gid = S.group.id;
+    if (!name || name === S.group.name) return;
+    return run(async () => {
+      await S.store.renameGroup(gid, name);
+      S.group.name = name;
+      S.groups = S.groups.map((x) => (x.id === gid ? { ...x, name } : x));
+      saveCache();
+      render();
+      groupSettingsModal();
+      toast(t('gs.renamed'), { ic: 'check' });
     });
   },
   challenge: (f) => {

@@ -6,14 +6,14 @@ Log your workouts set by set, rest with the built-in timer and compete with your
 
 ## Features
 
-- **Set-by-set logging**: big − and + buttons for weight and reps, pre-filled from your last session. Each set is saved with one tap; tap a set to edit or delete it.
+- **Set-by-set logging**: big − and + buttons for weight and reps, pre-filled from your last session. Each set is saved with one tap; tap a set to edit or delete it. Deleting a set or a whole exercise takes one tap and offers Undo.
 - **Rest timer**: starts automatically when you save a set and alerts you with sound and vibration. Keeps the screen awake while it runs.
-- **Exercise library** grouped by muscle, with search in both languages and a recent section. Each group can add its own exercises.
-- **Personal records** flagged with a trophy as you log them, plus per-exercise history.
-- **Group**: attendance, improvement, streak and volume rankings; challenges; profiles; a shared calendar; estimated-1RM progress charts.
+- **Exercise library**: about 290 exercises in 12 muscle groups, named as gym-goers say them in each language, with search by aliases (RDL, OHP, Gironda, Scott…) and a recent section. Each group can add its own exercises.
+- **Personal records** flagged with a trophy as you log them, plus per-exercise history, bests and a chart (estimated 1RM, max weight, volume or max reps).
+- **Group**: attendance, improvement, streak and volume rankings; challenges (attendance, volume, improvement, sets, reps, max weight, records); profiles; a shared calendar; progress charts. The creator can rename or delete the group, see pending invitations and remove members.
 - **No lost sets**: every set shows up instantly and syncs to the sheet in the background. If you're offline or your Google session expires, it stays on the device and syncs once you're back.
 - **Opens instantly**: the app remembers the session and keeps a copy of the open group on the device, so reopening it (e.g. the installed app) goes straight to your workout. A valid Google token is reused for up to an hour; after that, saving a set renews it in the background (no prompt, since access was already granted).
-- **Installable** on your phone's home screen (PWA manifest). Light and dark themes.
+- **Installable** on your phone's home screen (PWA manifest), with an in-app prompt: one tap on Android, step-by-step on iOS. Light and dark themes.
 
 It's a **frontend-only** app: HTML, CSS and JavaScript with no build step and no server. It's published as a static site on GitHub Pages, and the data lives in **Google Sheets**, in the Drive of whoever creates each group.
 
@@ -27,7 +27,7 @@ It's a **frontend-only** app: HTML, CSS and JavaScript with no build step and no
   |---|---|
   | `_group` | Schema version and app tag (protected: only the group creator can edit it) |
   | `_members` | `email, name, picture, joined` |
-  | `_challenges` | `id, title, type, exercise, start, end, created_by`; `type` is `attendance`, `volume` or `improvement` |
+  | `_challenges` | `id, title, type, exercise, start, end, created_by`; `type` is `attendance`, `volume`, `improvement`, `sets`, `reps`, `maxWeight` or `prs` |
   | `_exercises` | The group's custom exercises: `name, category, created_by` |
   | `<email>` (one per person) | `id, date, exercise, sets, reps, weight_kg, notes`, one row per set (`sets` = 1). A row with no exercise is an attendance-only day. Protected so only its owner can edit it |
 
