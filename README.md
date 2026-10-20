@@ -8,7 +8,7 @@ Log your workouts set by set, rest with the built-in timer and compete with your
 
 - **Home**: today's workout at a glance, this week, streak, monthly sessions, weekly volume, sets per muscle group, latest records and what the rest of the group did.
 - **Set-by-set logging**: big − and + buttons for weight and reps, pre-filled from your last session. Each set is saved with one tap; tap a set to edit or delete it. Deleting a set or a whole exercise takes one tap and offers Undo.
-- **Rest timer**: starts automatically when you save a set and alerts you with sound and vibration. Keeps the screen awake while it runs.
+- **Rest timer**: starts automatically when you save a set, counts down the last 3 seconds and ends with a loud alarm and vibration (Android; iOS doesn't allow web vibration). Optional system notification when it ends while you're in another app. Keeps the screen awake while it runs.
 - **Exercise library**: about 290 exercises in 12 muscle groups, named as gym-goers say them in each language, with search by aliases (RDL, OHP, Gironda, Scott…) and a recent section. Each group can add its own exercises.
 - **Personal records** flagged with a trophy as you log them, plus per-exercise history, bests and a chart (estimated 1RM, max weight, volume or max reps).
 - **Group**: attendance, improvement, streak and volume rankings; challenges (attendance, volume, improvement, sets, reps, max weight, records); profiles; a shared calendar; progress charts. The creator can rename or delete the group, see pending invitations and remove members. Groups can also be just for you: the group parts of the app hide until someone else joins.
@@ -43,6 +43,7 @@ It's a **frontend-only** app: HTML, CSS and JavaScript with no build step and no
 
 ```
 index.html            single page
+sw.js                 service worker, only for the rest-timer notification (no fetch handler, caches nothing)
 privacy.html          privacy policy in both languages (linked from the app and the consent screen)
 manifest.webmanifest  home-screen install
 icons/                app icon (SVG and PNG)

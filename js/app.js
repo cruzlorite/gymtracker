@@ -20,7 +20,7 @@ const STEP_OPTIONS = [1, 1.25, 2.5, 5];
 
 // ---------- per-device preferences ----------
 const PREFS_KEY = 'gt:prefs';
-const prefs = { rest: 90, autoRest: true, step: 2.5, theme: 'system', accent: 'lime' };
+const prefs = { rest: 90, autoRest: true, notify: false, step: 2.5, theme: 'system', accent: 'lime' };
 try { Object.assign(prefs, JSON.parse(localStorage.getItem(PREFS_KEY) || '{}')); } catch { /* no storage */ }
 const savePrefs = () => { try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch { /* ignore */ } };
 // Accent colours: [accent, text on accent, accent as text, soft accent background] for light and dark.
@@ -1329,7 +1329,7 @@ function saveSet() {
     S.outbox.add(gid, entry, who);
     if (St.prIds(targetEntries()).has(entry.id)) toast(t('ex.newPr'), { ic: 'trophy' });
     // Only while actually training: back-filling a past day doesn't need rest.
-    if (prefs.autoRest && S.day === St.todayISO()) Timer.start(prefs.rest);
+    if (prefs.autoRest && S.day === St.todayISO()) Timer.start(prefs.rest, { notify: prefs.notify });
     navigator.vibrate?.(20);
   }
   // Expired session: renew it using this click (Google's popup needs a user gesture).
@@ -1359,7 +1359,21 @@ function restSettings() {
   return `<div class="setting"><span class="setting-label">${t('timer.duration')}</span>
       ${segPref('rest', REST_OPTIONS.map((s) => [s, `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`]))}</div>
     <label class="setting row"><span><span class="setting-label">${t('timer.auto')}</span><span class="fine">${t('timer.autoHelp')}</span></span>
-      <span class="switch"><input type="checkbox" data-pref-toggle="autoRest" ${prefs.autoRest ? 'checked' : ''}><i></i></span></label>`;
+      <span class="switch"><input type="checkbox" data-pref-toggle="autoRest" ${prefs.autoRest ? 'checked' : ''}><i></i></span></label>
+    <label class="setting row"><span><span class="setting-label">${t('timer.notify')}</span><span class="fine">${t('timer.notifyHelp')}</span></span>
+      <span class="switch"><input type="checkbox" data-pref-toggle="notify" ${prefs.notify && notificationsGranted() ? 'checked' : ''}><i></i></span></label>`;
+}
+
+const notificationsGranted = () => 'Notification' in window && Notification.permission === 'granted';
+
+/** Turning on timer notifications asks for permission (from the toggle's own tap). */
+function enableNotifications(input) {
+  const off = (msg) => { prefs.notify = false; savePrefs(); input.checked = false; toast(msg, { error: true }); };
+  if (!('Notification' in window) || !navigator.serviceWorker) return off(t('timer.notifyUnsupported'));
+  Notification.requestPermission().then((p) => {
+    if (p === 'granted') toast(t('timer.notifyOn'), { ic: 'check' });
+    else off(t('timer.notifyDenied'));
+  });
 }
 
 function settingsModal() {
@@ -1702,7 +1716,7 @@ const actions = {
     renderSheet();
   },
   'timer-settings': () => timerModal(),
-  'timer-start': () => { Timer.start(prefs.rest); closeModal(); },
+  'timer-start': () => { Timer.start(prefs.rest, { notify: prefs.notify }); closeModal(); },
   'timer-stop': () => { Timer.stop(); closeModal(); },
   'new-challenge': () => challengeModal(),
   'group-menu': () => groupMenu(),
@@ -1924,7 +1938,11 @@ document.addEventListener('change', (e) => {
     });
   }
   if (el.dataset?.change === 'day' && St.isISODate(el.value)) { S.day = el.value > St.todayISO() ? St.todayISO() : el.value; render(); }
-  if (el.dataset?.prefToggle) { prefs[el.dataset.prefToggle] = el.checked; savePrefs(); }
+  if (el.dataset?.prefToggle) {
+    prefs[el.dataset.prefToggle] = el.checked;
+    savePrefs();
+    if (el.dataset.prefToggle === 'notify' && el.checked) enableNotifications(el);
+  }
 });
 $modal.addEventListener('click', (e) => { if (e.target === $modal) closeModal(); });
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { applyTheme(); if (S.tab === 'progress') render(); });
@@ -1944,3 +1962,5 @@ document.addEventListener('gesturestart', (e) => e.preventDefault());
 applyTheme();
 if (!restoreSession()) render();
 if (G.isConfigured()) G.loadGis().catch((e) => toast(e.message, { error: true }));
+// Only used for the rest-timer notification; it caches nothing.
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});

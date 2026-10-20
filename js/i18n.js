@@ -178,7 +178,11 @@ const es = {
 
   'timer.title': 'Temporizador de descanso', 'timer.rest': 'Descanso', 'timer.done': '¡A por la siguiente serie!',
   'timer.minus': 'Quitar 15 segundos', 'timer.plus': 'Añadir 15 segundos', 'timer.skip': 'Saltar descanso',
-  'timer.duration': 'Descanso entre series', 'timer.auto': 'Arrancar al guardar una serie', 'timer.autoHelp': 'Te avisa con sonido y vibración al terminar.',
+  'timer.duration': 'Descanso entre series', 'timer.auto': 'Arrancar al guardar una serie', 'timer.autoHelp': 'Cuenta atrás en los últimos 3 segundos y alarma con sonido y vibración al terminar.',
+  'timer.notify': 'Notificación al terminar', 'timer.notifyHelp': 'Te avisa aunque estés en otra app. Con la pantalla bloqueada puede llegar con algo de retraso.',
+  'timer.notifyDenied': 'Las notificaciones están bloqueadas. Actívalas para esta web en los ajustes del navegador.',
+  'timer.notifyUnsupported': 'Este navegador no permite notificaciones. En iPhone, instala la app en la pantalla de inicio.',
+  'timer.notifyOn': 'Te avisaremos al terminar el descanso.', 'timer.notifBody': 'Tu descanso ha terminado.',
   'timer.startNow': 'Empezar ahora',
 
   'settings.title': 'Ajustes', 'settings.language': 'Idioma', 'settings.theme': 'Tema', 'settings.accent': 'Color',
@@ -375,7 +379,11 @@ const en = {
 
   'timer.title': 'Rest timer', 'timer.rest': 'Rest', 'timer.done': 'Time for the next set!',
   'timer.minus': 'Remove 15 seconds', 'timer.plus': 'Add 15 seconds', 'timer.skip': 'Skip rest',
-  'timer.duration': 'Rest between sets', 'timer.auto': 'Start when saving a set', 'timer.autoHelp': 'Alerts you with sound and vibration when done.',
+  'timer.duration': 'Rest between sets', 'timer.auto': 'Start when saving a set', 'timer.autoHelp': 'Counts down the last 3 seconds and alarms with sound and vibration when done.',
+  'timer.notify': 'Notification when done', 'timer.notifyHelp': 'Alerts you even if you are in another app. With the screen locked it may arrive a little late.',
+  'timer.notifyDenied': 'Notifications are blocked. Allow them for this site in your browser settings.',
+  'timer.notifyUnsupported': "This browser doesn't support notifications. On iPhone, install the app on your home screen.",
+  'timer.notifyOn': "We'll let you know when your rest is over.", 'timer.notifBody': 'Your rest is over.',
   'timer.startNow': 'Start now',
 
   'settings.title': 'Settings', 'settings.language': 'Language', 'settings.theme': 'Theme', 'settings.accent': 'Colour',
