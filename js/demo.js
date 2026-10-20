@@ -101,20 +101,22 @@ export class DemoStore {
   async join() {}
 
   async loadGroup(id) {
-    return { ...structuredClone(this.#get(id)), isMember: true, isOwner: true, canShare: true, ownerName: t('demo.you'), suspicious: [] };
+    return { ...structuredClone(this.#get(id)), isMember: true, isOwner: true, openLogging: this.#get(id).openLogging !== false, canShare: true, ownerName: t('demo.you'), suspicious: [] };
   }
 
-  async addEntries(id, rows) { this.#get(id).entries.push(...rows.map((e) => ({ ...e, email: this.me.email }))); }
+  async addEntries(id, rows, email = this.me.email) { this.#get(id).entries.push(...rows.map((e) => ({ ...e, email }))); }
 
-  async updateEntry(id, e) {
+  async updateEntry(id, e, email = this.me.email) {
     const g = this.#get(id);
-    g.entries = g.entries.map((x) => (x.id === e.id && x.email === this.me.email ? { ...e, email: this.me.email } : x));
+    g.entries = g.entries.map((x) => (x.id === e.id && x.email === email ? { ...e, email } : x));
   }
 
-  async deleteEntry(id, entryId) {
+  async deleteEntry(id, entryId, email = this.me.email) {
     const g = this.#get(id);
-    g.entries = g.entries.filter((e) => !(e.id === entryId && e.email === this.me.email));
+    g.entries = g.entries.filter((e) => !(e.id === entryId && e.email === email));
   }
+
+  async setOpenLogging(id, open) { this.#get(id).openLogging = open; }
 
   async addChallenge(id, c) { this.#get(id).challenges.push({ ...c, createdBy: this.me.email }); }
 

@@ -176,6 +176,11 @@ const num = (v) => {
 };
 const CH_TYPES = new Set(['attendance', 'volume', 'improvement', 'sets', 'reps', 'maxWeight', 'prs']);
 const entryRow = (e) => [e.id, e.date, e.exercise, e.sets, e.reps, e.weight, e.notes || ''];
+const OPEN_KEY = 'open_logging';
+/** Locks a personal tab so only its owner (and the sheet owner) can edit it. */
+const protectTab = (sheetId, email) => ({ addProtectedRange: { protectedRange: {
+  range: { sheetId }, description: `${email}'s workouts: only the owner can edit`, editors: { users: [email] },
+} } });
 
 /** Google profile pictures only: an arbitrary URL in _members would reveal the IP of everyone opening the app. */
 function safePicture(v) {
@@ -212,7 +217,7 @@ export class SheetStore {
 
   constructor(me) {
     this.me = me;
-    this.meta = new Map(); // groupId → { myTab, hasExercises }
+    this.meta = new Map(); // groupId → { tabs: Map(email → tab), hasExercises, openLogging }
   }
 
   async listGroups() {
@@ -242,7 +247,7 @@ export class SheetStore {
       body: {
         valueInputOption: 'RAW',
         data: [
-          { range: `${TAB.group}!A1`, values: [HEADERS.group, ['schema', SCHEMA_VERSION], ['app', CONFIG.APP_TAG]] },
+          { range: `${TAB.group}!A1`, values: [HEADERS.group, ['schema', SCHEMA_VERSION], ['app', CONFIG.APP_TAG], [OPEN_KEY, 'true']] },
           { range: `${TAB.members}!A1`, values: [HEADERS.members] },
           { range: `${TAB.challenges}!A1`, values: [HEADERS.challenges] },
           { range: `${TAB.exercises}!A1`, values: [HEADERS.exercises] },
@@ -260,12 +265,12 @@ export class SheetStore {
     await api(`${DRIVE}/${id}`, {
       method: 'PATCH', body: { appProperties: { app: CONFIG.APP_TAG, schema: SCHEMA_VERSION }, writersCanShare: false },
     });
-    await this.join(id);
+    await this.join(id, { open: true });
     return id;
   }
 
   async tabs(id) {
-    const fields = 'properties.title,sheets(properties(sheetId,title),protectedRanges(range,editors,requestingUserCanEdit))';
+    const fields = 'properties.title,sheets(properties(sheetId,title),protectedRanges(protectedRangeId,range,editors,requestingUserCanEdit))';
     const r = await api(`${SHEETS}/${id}`, { query: { fields } });
     return { title: r.properties.title, tabs: r.sheets.map((s) => ({ ...s.properties, protectedRanges: s.protectedRanges || [] })) };
   }
@@ -274,13 +279,22 @@ export class SheetStore {
     return api(`${DRIVE}/${id}`, { query: { fields: 'ownedByMe,writersCanShare,owners(displayName,emailAddress),capabilities(canShare)' } });
   }
 
-  /** Creates the user's tab (protected so only they can edit it) and adds them to _members. */
-  async join(id) {
+  /** Whether anyone in the group may log sets for anyone (the `open_logging` row of _group). */
+  async #openLogging(id) {
+    const r = await api(`${SHEETS}/${id}/values/${enc(`${TAB.group}!A2:B`)}`);
+    return (r.values || []).some((row) => row[0] === OPEN_KEY && String(row[1]).toLowerCase() === 'true');
+  }
+
+  /**
+   * Creates the user's tab and adds them to _members. In protected mode the tab is locked so only they
+   * (and the sheet owner) can edit it; in open mode any member can log sets in it.
+   */
+  async join(id, { open } = {}) {
     const me = this.me;
-    const [{ tabs }, file] = await Promise.all([this.tabs(id), this.file(id)]);
+    const [{ tabs }, file, isOpen] = await Promise.all([this.tabs(id), this.file(id), open ?? this.#openLogging(id)]);
     if (!tabs.some((x) => x.title === TAB.members)) throw new Error(t('err.notGroup'));
     const mine = tabs.find((x) => x.title.toLowerCase() === me.email);
-    if (mine && tabOwnership(mine, file.owners?.[0]?.emailAddress?.toLowerCase()) !== true) {
+    if (mine && !isOpen && tabOwnership(mine, file.owners?.[0]?.emailAddress?.toLowerCase()) !== true) {
       throw new Error(file.ownedByMe
         ? t('err.tabNotYoursOwner', { tab: mine.title })
         : t('err.tabNotYours', { owner: file.owners?.[0]?.displayName || t('group.creator') }));
@@ -291,9 +305,7 @@ export class SheetStore {
         method: 'POST',
         body: { requests: [
           { addSheet: { properties: { sheetId, title: me.email } } },
-          { addProtectedRange: { protectedRange: {
-            range: { sheetId }, description: `${me.name}'s workouts: only the owner can edit`, editors: { users: [me.email] },
-          } } },
+          ...(isOpen ? [] : [protectTab(sheetId, me.email)]),
         ] },
       });
       await api(`${SHEETS}/${id}/values/${enc(`${quote(me.email)}!A1`)}`, {
@@ -313,16 +325,19 @@ export class SheetStore {
     if (file.ownedByMe && file.writersCanShare !== false) {
       api(`${DRIVE}/${id}`, { method: 'PATCH', body: { writersCanShare: false } }).catch(() => {});
     }
+    const openLogging = await this.#openLogging(id);
     const userTabs = [];
     const suspicious = [];
     for (const tab of tabs) {
       if (tab.title.startsWith('_') || !tab.title.includes('@')) continue;
+      // In open mode anyone may write in any tab, so there is no ownership to verify.
+      if (openLogging) { userTabs.push(tab); continue; }
       const ok = tabOwnership(tab, ownerEmail);
       const mine = tab.title.toLowerCase() === this.me.email;
       (ok === false || (mine && ok !== true) ? suspicious : userTabs).push(tab);
     }
     const hasExercises = tabs.some((x) => x.title === TAB.exercises);
-    this.meta.set(id, { myTab: userTabs.find((x) => x.title.toLowerCase() === this.me.email) || null, hasExercises });
+    this.meta.set(id, { tabs: new Map(userTabs.map((x) => [x.title.toLowerCase(), x])), hasExercises, openLogging });
 
     const params = new URLSearchParams({ valueRenderOption: 'UNFORMATTED_VALUE' });
     // Without an _exercises tab, that slot re-reads _members and is discarded below.
@@ -372,15 +387,17 @@ export class SheetStore {
       members, entries, challenges, exercises,
       isMember: tabEmails.has(this.me.email),
       isOwner: Boolean(file.ownedByMe),
+      openLogging,
       canShare: Boolean(file.capabilities?.canShare),
       ownerName: file.owners?.[0]?.displayName || '',
       suspicious: suspicious.map((x) => x.title),
     };
   }
 
-  async #myTab(id) {
-    if (!this.meta.get(id)?.myTab) await this.loadGroup(id);
-    const tab = this.meta.get(id)?.myTab;
+  /** The tab where `email`'s sets live (the signed-in user's by default). */
+  async #tabOf(id, email = this.me.email) {
+    if (!this.meta.get(id)?.tabs?.has(email)) await this.loadGroup(id);
+    const tab = this.meta.get(id)?.tabs?.get(email);
     if (!tab) throw new Error(t('err.noTab'));
     return tab;
   }
@@ -394,12 +411,13 @@ export class SheetStore {
     return (r.values || []).flatMap((row, i) => (i > 0 && String(row[0]) === entryId ? [i] : []));
   }
 
-  addEntries(id, rows) {
-    return append(id, this.me.email, rows.map(entryRow));
+  async addEntries(id, rows, email = this.me.email) {
+    const tab = email === this.me.email ? { title: this.me.email } : await this.#tabOf(id, email);
+    return append(id, tab.title, rows.map(entryRow));
   }
 
-  async updateEntry(id, e) {
-    const tab = await this.#myTab(id);
+  async updateEntry(id, e, email = this.me.email) {
+    const tab = await this.#tabOf(id, email);
     const rows = await this.#rowsOf(id, tab, e.id);
     if (!rows.length) return; // deleted from the sheet: nothing to update
     await api(`${SHEETS}/${id}/values:batchUpdate`, {
@@ -408,8 +426,8 @@ export class SheetStore {
     });
   }
 
-  async deleteEntry(id, entryId) {
-    const tab = await this.#myTab(id);
+  async deleteEntry(id, entryId, email = this.me.email) {
+    const tab = await this.#tabOf(id, email);
     const rows = await this.#rowsOf(id, tab, entryId);
     if (!rows.length) return; // already gone: deleting is idempotent
     // Bottom-up, so deleting one row doesn't shift the next ones.
@@ -469,6 +487,31 @@ export class SheetStore {
     // Bottom-up, so deleting one row doesn't shift the next ones.
     for (const i of rows.reverse()) {
       requests.push({ deleteDimension: { range: { sheetId: membersTab.sheetId, dimension: 'ROWS', startIndex: i, endIndex: i + 1 } } });
+    }
+    if (requests.length) await api(`${SHEETS}/${id}:batchUpdate`, { method: 'POST', body: { requests } });
+  }
+
+  /**
+   * Owner only. Open: anyone can log sets for anyone (protections on personal tabs are removed).
+   * Closed: each personal tab is locked to its owner again.
+   */
+  async setOpenLogging(id, open) {
+    const { tabs } = await this.tabs(id);
+    const r = await api(`${SHEETS}/${id}/values/${enc(`${TAB.group}!A:A`)}`);
+    const row = (r.values || []).findIndex((x) => x[0] === OPEN_KEY);
+    if (row > 0) {
+      await api(`${SHEETS}/${id}/values/${enc(`${TAB.group}!A${row + 1}:B${row + 1}`)}`, {
+        method: 'PUT', query: { valueInputOption: 'RAW' }, body: { values: [[OPEN_KEY, String(open)]] },
+      });
+    } else {
+      await append(id, TAB.group, [[OPEN_KEY, String(open)]]);
+    }
+    const requests = [];
+    for (const tab of tabs) {
+      if (tab.title.startsWith('_') || !tab.title.includes('@')) continue;
+      const whole = tab.protectedRanges.filter((p) => isWholeSheet(p.range, tab.sheetId));
+      if (open) whole.forEach((p) => requests.push({ deleteProtectedRange: { protectedRangeId: p.protectedRangeId } }));
+      else if (!whole.length) requests.push(protectTab(tab.sheetId, tab.title.toLowerCase()));
     }
     if (requests.length) await api(`${SHEETS}/${id}:batchUpdate`, { method: 'POST', body: { requests } });
   }

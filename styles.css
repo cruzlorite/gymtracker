@@ -479,6 +479,52 @@ body:has(#restbar.show) .fab { bottom: calc(var(--nav-h) + var(--safe-b) + 92px)
 .info-box dt { font-weight: 700; color: var(--text); }
 .info-box dd { margin: 0 0 8px; color: var(--muted); }
 .info-box dd:last-child { margin-bottom: 0; }
+/* Home */
+.home-head { margin: 4px 0 16px; }
+.home-head h1 { font-size: 28px; font-weight: 800; letter-spacing: -.03em; }
+.today-card { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.today-card h2 { font-size: 21px; font-weight: 750; letter-spacing: -.02em; }
+.today-card .muted { margin-top: 4px; }
+.today-card.done { background: var(--accent-soft); border-color: transparent; }
+.eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+.home-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.week-dots { display: flex; gap: 4px; margin: 4px 0 2px; }
+.week-dots i { display: grid; place-items: center; flex: 1; max-width: 26px; aspect-ratio: 1; border-radius: 50%; background: var(--surface-2); color: var(--muted); font-style: normal; font-size: 10.5px; font-weight: 700; }
+.week-dots i.on { background: var(--accent); color: var(--accent-ink); }
+.week-dots i.today { box-shadow: inset 0 0 0 2px var(--accent-text); }
+.vol-bars { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; align-items: end; height: 150px; }
+.vol-col { display: grid; grid-template-rows: 1fr auto; gap: 6px; height: 100%; text-align: center; }
+.vol-col i { align-self: end; display: block; border-radius: 8px 8px 4px 4px; background: var(--surface-3); min-height: 0; }
+.vol-col.now i { background: var(--accent); }
+.vol-col span { font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; }
+.cat-bars, .pr-list, .activity { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.cat-bars li { display: grid; grid-template-columns: minmax(0, 7.5em) 1fr 2.5em; align-items: center; gap: 10px; font-size: 14px; }
+.cat-name { display: flex; align-items: center; gap: 8px; font-weight: 600; white-space: nowrap; overflow: hidden; }
+.cat-bars b { text-align: right; font-variant-numeric: tabular-nums; }
+.pr-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; font-size: 14.5px; font-variant-numeric: tabular-nums; }
+.pr-list .link { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.activity li { display: flex; align-items: center; gap: 10px; }
+.activity li > div { flex: 1; min-width: 0; display: grid; }
+.activity li .muted { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 760px) { .home-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Logging for another member */
+.log-for { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.log-for-label { flex: none; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.people.compact { margin: 0; padding: 0; }
+.for-notice { margin-bottom: 12px; background: var(--accent-soft); }
+.for-notice > .ic { color: var(--accent-text); }
+.for-who { color: var(--accent-text); }
+
+/* Start screen: solo or with friends */
+.start-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 14px; max-width: 760px; margin: 0 auto 16px; }
+.start-card { display: grid; gap: 10px; align-content: start; }
+.start-card .feature-ic { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 13px; background: var(--accent-soft); color: var(--accent-text); }
+.start-card h3 { font-size: 17px; }
+.nav-brand, .appbar-logo { border: 0; background: none; padding: 0; color: inherit; cursor: pointer; }
+button.appbar-logo { display: inline-flex; }
+button.nav-brand { text-align: left; }
+
 .btn.danger-solid { background: var(--danger); border-color: var(--danger); color: #fff; }
 .member-list { list-style: none; margin: 0 0 10px; padding: 0; display: grid; }
 .member-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); }

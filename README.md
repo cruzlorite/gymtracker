@@ -6,11 +6,13 @@ Log your workouts set by set, rest with the built-in timer and compete with your
 
 ## Features
 
+- **Home**: today's workout at a glance, this week, streak, monthly sessions, weekly volume, sets per muscle group, latest records and what the rest of the group did.
 - **Set-by-set logging**: big − and + buttons for weight and reps, pre-filled from your last session. Each set is saved with one tap; tap a set to edit or delete it. Deleting a set or a whole exercise takes one tap and offers Undo.
 - **Rest timer**: starts automatically when you save a set and alerts you with sound and vibration. Keeps the screen awake while it runs.
 - **Exercise library**: about 290 exercises in 12 muscle groups, named as gym-goers say them in each language, with search by aliases (RDL, OHP, Gironda, Scott…) and a recent section. Each group can add its own exercises.
 - **Personal records** flagged with a trophy as you log them, plus per-exercise history, bests and a chart (estimated 1RM, max weight, volume or max reps).
-- **Group**: attendance, improvement, streak and volume rankings; challenges (attendance, volume, improvement, sets, reps, max weight, records); profiles; a shared calendar; progress charts. The creator can rename or delete the group, see pending invitations and remove members.
+- **Group**: attendance, improvement, streak and volume rankings; challenges (attendance, volume, improvement, sets, reps, max weight, records); profiles; a shared calendar; progress charts. The creator can rename or delete the group, see pending invitations and remove members. Groups can also be just for you: the group parts of the app hide until someone else joins.
+- **Log for others**: pick a member in the Workout tab and log their sets (open mode, or always for the group creator).
 - **No lost sets**: every set shows up instantly and syncs to the sheet in the background. If you're offline or your Google session expires, it stays on the device and syncs once you're back.
 - **Opens instantly**: the app remembers the session and keeps a copy of the open group on the device, so reopening it (e.g. the installed app) goes straight to your workout. A valid Google token is reused for up to an hour; after that, saving a set renews it in the background (no prompt, since access was already granted).
 - **Installable** on your phone's home screen (PWA manifest), with an in-app prompt: one tap on Android, step-by-step on iOS. Light and dark themes.
@@ -25,14 +27,15 @@ It's a **frontend-only** app: HTML, CSS and JavaScript with no build step and no
 
   | Tab | Contents |
   |---|---|
-  | `_group` | Schema version and app tag (protected: only the group creator can edit it) |
+  | `_group` | Schema version, app tag and `open_logging` (protected: only the group creator can edit it) |
   | `_members` | `email, name, picture, joined` |
   | `_challenges` | `id, title, type, exercise, start, end, created_by`; `type` is `attendance`, `volume`, `improvement`, `sets`, `reps`, `maxWeight` or `prs` |
   | `_exercises` | The group's custom exercises: `name, category, created_by` |
-  | `<email>` (one per person) | `id, date, exercise, sets, reps, weight_kg, notes`, one row per set (`sets` = 1). A row with no exercise is an attendance-only day. Protected so only its owner can edit it |
+  | `<email>` (one per person) | `id, date, exercise, sets, reps, weight_kg, notes`, one row per set (`sets` = 1). A row with no exercise counts as an attendance-only day. In protected mode only its owner (and the sheet owner) can edit it; in open mode any member can |
 
 - **Schema version**: new sheets are tagged `schema=2` in their Drive `appProperties`, and the app only lists sheets with that tag.
 - **Exercise names**: library exercises are stored under their English name and translated for display. A group can mix people using the app in either language.
+- **Open vs protected mode**: new groups start in open mode (`open_logging = true`): personal tabs aren't protected, so any member can log, edit or delete anyone's sets. The creator can switch to protected mode in Group settings, which locks each personal tab to its owner again.
 - **Invites**: only the group creator can invite. The app shares the sheet from their Drive (*editor* role) and Google emails the `?group=<id>` link. The first time, the invitee picks the sheet in the file picker so the app gets access to it. Other members can't re-share it (`writersCanShare: false`).
 - **Demo mode**: the *Try the demo* button uses made-up in-memory data and works with no setup.
 
@@ -123,7 +126,7 @@ All paths are relative, so it works the same under a subdirectory (`/<repo>/`) o
 - **Minimal permissions.** It only asks for `drive.file`: a stolen token only reaches that person's GymTracker sheets.
 - **No XSS from sheet data.** Everything read from the sheet is escaped before rendering.
 - **Profile pictures.** Only pictures from `*.googleusercontent.com` are loaded, so nobody can put their own URL in the sheet and see the IP of everyone opening the app.
-- **Personal tabs.** Each tab is protected in its owner's name. If someone creates a tab named after another person's email, the app ignores and flags it in two cases: when the tab isn't protected, and when viewed by the sheet owner or by the impersonated person, the only ones who can see the protection's editors. The impersonated person also can't join until that tab is deleted.
+- **Personal tabs (protected mode).** Each tab is protected in its owner's name. If someone creates a tab named after another person's email, the app ignores and flags it in two cases: when the tab isn't protected, and when viewed by the sheet owner or by the impersonated person, the only ones who can see the protection's editors. The impersonated person also can't join until that tab is deleted.
 - **Membership.** A row in `_members` without a valid tab doesn't count as a member.
 - **Malformed data.** Invalid dates and challenges (e.g. edited by hand) are ignored instead of breaking the view.
 - **Duplicate rows.** If a network retry duplicates a row, the app shows it once, and editing or deleting the set affects every copy.
@@ -131,6 +134,7 @@ All paths are relative, so it works the same under a subdirectory (`/<repo>/`) o
 ### What it can't protect (accepted risks)
 
 - Every group member can see and download the whole sheet (everyone's emails and workouts).
+- In open mode (the default for new groups) any member can log, edit or delete anyone's sets, and impersonating someone is possible by design. Sheets' version history can recover changes; switch to protected mode if the group needs it.
 - The group creator owns the sheet and can edit or delete any data.
 - Any member can edit `_members`, `_challenges` and `_exercises`, e.g. change someone's display name or delete challenges. Sheets keeps a version history to recover changes.
 - Everyone logs whatever they want in their own tab: cheating is trivial.

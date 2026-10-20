@@ -13,7 +13,7 @@ const $modal = document.getElementById('modal');
 const $toast = document.getElementById('toast');
 
 const COLORS = ['#5B8DEF', '#F2994A', '#27AE60', '#E056A0', '#9B51E0', '#2DCCD3', '#EB5757', '#F2C94C'];
-const TABS = [['log', 'dumbbell'], ['history', 'calendar'], ['progress', 'chart'], ['group', 'users']];
+const TABS = [['home', 'home'], ['log', 'dumbbell'], ['history', 'calendar'], ['progress', 'chart'], ['group', 'users']];
 const CH_TYPES = ['attendance', 'volume', 'improvement', 'sets', 'reps', 'maxWeight', 'prs'];
 const REST_OPTIONS = [60, 90, 120, 150, 180, 240];
 const STEP_OPTIONS = [1, 1.25, 2.5, 5];
@@ -33,7 +33,7 @@ function applyTheme() {
 const params = new URLSearchParams(location.search);
 const S = {
   store: null, me: null, groups: [], group: null, outbox: null,
-  tab: 'log', groupTab: 'ranking',
+  tab: 'home', groupTab: 'ranking', logFor: '',
   day: St.todayISO(), period: '30', month: St.todayISO().slice(0, 7), exercise: '', metric: 'e1rm', compare: true, profile: '',
   sheet: null, // { kind: 'picker', q, cat } | { kind: 'exercise', name, view, edit, w, r }
   pendingGroup: params.get('group'), needsPicker: null, chart: null, loadedAt: 0,
@@ -71,6 +71,15 @@ const members = () => S.group?.members || [];
 const member = (email) => members().find((m) => m.email === email);
 const entriesOf = (email) => S.group.entries.filter((e) => e.email === email);
 const mine = () => entriesOf(S.me.email);
+// Logging for someone else: the group creator always can (they own the sheet); others only when the
+// group is in open mode. Everything in the Workout tab and the exercise sheet works on `target()`.
+const canLogFor = (email) => email === S.me.email || Boolean(S.group?.openLogging || S.group?.isOwner);
+const canLogForOthers = () => members().length > 1 && Boolean(S.group?.openLogging || S.group?.isOwner);
+/** A group with only you in it: rankings, comparisons and the Group tab are hidden. */
+const solo = () => members().length <= 1;
+const visibleTabs = () => TABS.filter(([k]) => k !== 'group' || !solo());
+const target = () => (S.logFor && S.logFor !== S.me.email && member(S.logFor) && canLogFor(S.logFor) ? S.logFor : S.me.email);
+const targetEntries = () => entriesOf(target());
 const usedNames = () => [...new Set(S.group?.entries.map((e) => e.exercise).filter(Boolean) || [])];
 
 function initials(name) {
@@ -135,7 +144,7 @@ function assignColors(g) {
 function startSession(store, me, outboxKey) {
   S.store = store;
   S.me = me;
-  S.outbox = new Outbox(outboxKey, store, () => { renderSync(); saveCache(); });
+  S.outbox = new Outbox(outboxKey, store, me.email, () => { renderSync(); saveCache(); });
 }
 
 // ---------- local session and cache ----------
@@ -166,7 +175,7 @@ function restoreSession() {
   S.groups = cache?.groups || [];
   if (cache?.group?.id) {
     const g = cache.group;
-    g.entries = S.outbox.apply(g.id, g.entries || [], S.me.email);
+    g.entries = S.outbox.apply(g.id, g.entries || []);
     assignColors(g);
     Ex.setCustomExercises(g.exercises || []);
     S.group = g;
@@ -190,7 +199,7 @@ async function afterLogin() {
 
 async function openGroup(id) {
   const g = await S.store.loadGroup(id);
-  g.entries = S.outbox.apply(id, g.entries, S.me.email);
+  g.entries = S.outbox.apply(id, g.entries);
   assignColors(g);
   Ex.setCustomExercises(g.exercises || []);
   S.group = g;
@@ -250,7 +259,10 @@ function render() {
 }
 
 function view() {
+  if (!visibleTabs().some(([k]) => k === S.tab)) S.tab = 'home';
   switch (S.tab) {
+    case 'home': return viewHome();
+    case 'log': return viewLog();
     case 'history': return viewHistory();
     case 'progress': return viewProgress();
     case 'group': return viewGroup();
@@ -368,13 +380,13 @@ function shell(content) {
   const tabs = g?.isMember && !S.needsPicker;
   return `<div class="shell ${tabs ? 'has-nav' : ''}">
     ${tabs ? `<nav class="nav" aria-label="${t('nav.label')}">
-      <div class="nav-brand">${logo(30)}<span class="wordmark">GymTracker</span></div>
-      ${TABS.map(([k, ic]) => `<button class="nav-item ${S.tab === k ? 'on' : ''}" data-action="tab" data-tab="${k}" ${S.tab === k ? 'aria-current="page"' : ''}>
+      <button class="nav-brand" data-action="tab" data-tab="home" aria-label="${t('nav.home')}">${logo(30)}<span class="wordmark">GymTracker</span></button>
+      ${visibleTabs().map(([k, ic]) => `<button class="nav-item ${S.tab === k ? 'on' : ''}" data-action="tab" data-tab="${k}" ${S.tab === k ? 'aria-current="page"' : ''}>
         ${icon(ic)}<span>${t(`nav.${k}`)}</span></button>`).join('')}
     </nav>` : ''}
     <div class="page">
       <header class="appbar">
-        <span class="appbar-logo">${logo(28)}</span>
+        ${tabs ? `<button class="appbar-logo" data-action="tab" data-tab="home" aria-label="${t('nav.home')}">${logo(28)}</button>` : `<span class="appbar-logo">${logo(28)}</span>`}
         ${S.groups.length || g ? `<button class="group-btn" data-action="group-menu"><span>${esc(g?.name || t('group.groups'))}</span>${icon('down')}</button>` : '<span class="wordmark">GymTracker</span>'}
         <span class="spacer"></span>
         <span id="sync"></span>
@@ -398,12 +410,23 @@ function joinScreen() {
 }
 
 function noGroups() {
-  return emptyState('users', t('groups.emptyTitle'), t('groups.emptyText'),
-    `<form class="inline-form" data-form="create-group">
-      <input name="name" required maxlength="60" placeholder="${t('groups.namePlaceholder')}" aria-label="${t('groups.name')}">
-      <button class="btn primary">${t('groups.create')}</button>
-    </form>
-    ${S.store.kind === 'google' ? `<button class="btn ghost" data-action="pick-any">${t('groups.pickShared')}</button>` : ''}`);
+  return `<section class="empty"><div class="empty-ic">${icon('dumbbell')}</div><h2>${t('groups.emptyTitle')}</h2><p>${t('groups.emptyText')}</p></section>
+    <div class="start-grid">
+      <article class="card start-card">
+        <span class="feature-ic">${icon('lock')}</span>
+        <h3>${t('groups.soloTitle')}</h3><p class="muted">${t('groups.soloText')}</p>
+        <button class="btn primary block" data-action="create-solo">${t('groups.soloButton')}</button>
+      </article>
+      <article class="card start-card">
+        <span class="feature-ic">${icon('users')}</span>
+        <h3>${t('groups.friendsTitle')}</h3><p class="muted">${t('groups.friendsText')}</p>
+        <form class="inline-form" data-form="create-group">
+          <input name="name" required maxlength="60" placeholder="${t('groups.namePlaceholder')}" aria-label="${t('groups.name')}">
+          <button class="btn primary">${t('groups.createShort')}</button>
+        </form>
+      </article>
+    </div>
+    ${S.store.kind === 'google' ? `<p class="center"><button class="btn ghost" data-action="pick-any">${icon('sheet')} ${t('groups.pickShared')}</button></p>` : ''}`;
 }
 
 function notMember() {
@@ -417,6 +440,104 @@ function suspiciousNote() {
   if (!s.length) return '';
   return `<p class="notice warn">${icon('shield')}<span>${t('suspicious', { n: s.length, tabs: s.map(esc).join(', ') })}
     ${S.group.url ? ` <a href="${esc(S.group.url)}" target="_blank" rel="noopener">${t('suspicious.open')}</a>` : ''}</span></p>`;
+}
+
+/** "Logging for" chips on the Workout tab, when you may log sets for other members. */
+function logForPicker() {
+  if (!canLogForOthers()) return '';
+  const who = target();
+  return `<div class="log-for">
+      <span class="log-for-label">${t('log.for')}</span>
+      <div class="people compact">${[...members()].sort((a, b) => (a.email === S.me.email ? -1 : b.email === S.me.email ? 1 : 0)).map((m) => `<button class="person ${m.email === who ? 'on' : ''}" data-action="log-for" data-e="${esc(m.email)}">${avatar(m)}<span>${esc(m.email === S.me.email ? t('common.you') : m.name.split(' ')[0])}</span></button>`).join('')}</div>
+    </div>
+    ${who !== S.me.email ? `<p class="notice for-notice">${icon('edit')}<span>${t('log.forNotice', { name: `<strong>${esc(member(who)?.name || '')}</strong>` })}</span></p>` : ''}`;
+}
+
+// ---------- Home ----------
+function viewHome() {
+  const es = mine();
+  const today = St.todayISO();
+  const first = (S.me.name || '').split(' ')[0];
+  const todays = es.filter((e) => e.date === today && e.exercise);
+  const todayEx = new Set(todays.map((e) => e.exercise)).size;
+  const todaySets = todays.reduce((a, e) => a + (e.sets || 1), 0);
+  const ws = St.weekStart(today);
+  const inRange = (e, from, to) => e.date >= from && e.date <= to;
+  const week = { from: ws, to: St.addDays(ws, 6) };
+  const lastWeek = { from: St.addDays(ws, -7), to: St.addDays(ws, -1) };
+  const trained = new Set(es.filter((e) => inRange(e, week.from, week.to)).map((e) => e.date));
+  const weekDays = Array.from({ length: 7 }, (_, i) => St.addDays(ws, i));
+  const monthFrom = `${today.slice(0, 8)}01`;
+  const monthSets = es.filter((e) => e.exercise && inRange(e, monthFrom, today));
+  // Weekly volume, last 8 weeks (oldest first).
+  const weeks = Array.from({ length: 8 }, (_, i) => St.addDays(ws, -7 * (7 - i)));
+  const vols = weeks.map((w) => St.volume(es, { from: w, to: St.addDays(w, 6) }));
+  const maxVol = Math.max(...vols, 1);
+  // Sets per muscle group this month.
+  const byCat = new Map();
+  for (const e of monthSets) { const c = Ex.categoryOf(e.exercise); byCat.set(c.id, (byCat.get(c.id) || 0) + (e.sets || 1)); }
+  const cats = [...byCat].sort((a, b) => b[1] - a[1]).map(([id, n]) => ({ c: Ex.CATEGORIES.find((x) => x.id === id), n }));
+  const maxCat = Math.max(...cats.map((x) => x.n), 1);
+  const prs = St.prIds(es);
+  const recentPrs = es.filter((e) => prs.has(e.id)).sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 5);
+  // What the rest of the group did in the last 7 days.
+  const since = St.addDays(today, -6);
+  const activity = [];
+  for (const m of members()) {
+    if (m.email === S.me.email) continue;
+    for (const [date, list] of groupByDate(entriesOf(m.email).filter((e) => e.exercise && e.date >= since))) activity.push({ m, date, ex: [...new Set(list.map((e) => e.exercise))] });
+  }
+  activity.sort((a, b) => (a.date < b.date ? 1 : -1));
+
+  return `<div class="home-head">
+      <h1>${t('home.hello', { name: esc(first) })}</h1>
+      <p class="muted">${fmtLong(today)}</p>
+    </div>
+    <section class="card today-card ${todays.length ? 'done' : ''}">
+      ${todays.length
+        ? `<div><p class="eyebrow">${t('home.today')}</p><h2>${fmtN(todayEx)} ${t('log.exercises', { n: todayEx })} · ${t('log.sets', { n: todaySets })}</h2></div>
+           <button class="btn primary lg" data-action="go-log">${icon('dumbbell')} ${t('home.continue')}</button>`
+        : `<div><p class="eyebrow">${t('home.today')}</p><h2>${t('home.todayEmpty')}</h2><p class="muted">${t('home.todayEmptyText')}</p></div>
+           <button class="btn primary lg" data-action="start-workout">${icon('plus')} ${t('home.start')}</button>`}
+    </section>
+    <div class="home-tiles">
+      <div class="tile week-tile"><span>${t('home.week')}</span>
+        <div class="week-dots">${weekDays.map((d) => `<i class="${trained.has(d) ? 'on' : ''} ${d === today ? 'today' : ''}" title="${esc(fmtLong(d))}">${df({ weekday: 'narrow' }).format(St.parseISO(d))}</i>`).join('')}</div>
+        <em>${t('home.lastWeek', { n: St.attendance(es, lastWeek) })}</em></div>
+      <div class="tile"><span>${t('ranking.streak')}</span><strong>${t('unit.weeks', { n: fmtN(St.weekStreak(es)) })}</strong></div>
+      <div class="tile"><span>${t('home.month')}</span><strong>${t('home.sessions', { n: fmtN(St.attendance(es, { from: monthFrom, to: today })) })}</strong></div>
+      <div class="tile"><span>${t('home.weekVolume')}</span><strong>${fmtKg(St.volume(es, week))}</strong></div>
+    </div>
+    <div class="grid two">
+      <section class="card">
+        <h3>${icon('chart')} ${t('home.volumeTrend')}</h3>
+        <div class="vol-bars">${vols.map((v, i) => `<div class="vol-col ${i === 7 ? 'now' : ''}" title="${fmtKg(v)}"><i style="height:${Math.max(v ? 4 : 0, v / maxVol * 100)}%"></i><span>${df({ day: 'numeric', month: 'short' }).format(St.parseISO(weeks[i]))}</span></div>`).join('')}</div>
+      </section>
+      <section class="card">
+        <h3>${icon('dumbbell')} ${t('home.muscles')}</h3>
+        ${cats.length ? `<ul class="cat-bars">${cats.map(({ c, n }) => `<li><span class="cat-name"><span class="cat-dot" style="--c:${c.color}"></span>${esc(Ex.catLabel(c))}</span>
+          <span class="bar"><i style="width:${n / maxCat * 100}%;background:${c.color}"></i></span><b>${fmtN(n)}</b></li>`).join('')}</ul>`
+          : `<p class="muted">${t('home.musclesEmpty')}</p>`}
+      </section>
+      <section class="card">
+        <h3>${icon('trophy')} ${t('home.prs')}</h3>
+        ${recentPrs.length ? `<ul class="pr-list">${recentPrs.map((e) => `<li><button class="link" data-action="open-ex" data-name="${esc(e.exercise)}">${esc(Ex.exName(e.exercise))}</button>
+          <span>${fmtW(e.weight)} × ${fmtN(e.reps)}</span><span class="muted">${relDay(e.date)}</span></li>`).join('')}</ul>`
+          : `<p class="muted">${t('home.noPrs')}</p>`}
+      </section>
+      ${solo() ? '' : `<section class="card">
+        <h3>${icon('users')} ${t('home.activity')}</h3>
+        ${activity.length ? `<ul class="activity">${activity.slice(0, 6).map(({ m, date, ex }) => `<li>${avatar(m)}<div><strong>${esc(m.name)}</strong>
+          <span class="muted">${ex.slice(0, 3).map((n) => esc(Ex.exName(n))).join(', ')}${ex.length > 3 ? ` +${ex.length - 3}` : ''}</span></div><span class="muted">${relDay(date)}</span></li>`).join('')}</ul>`
+          : `<p class="muted">${t('home.noActivity')}</p>`}
+      </section>`}
+    </div>`;
+}
+
+function groupByDate(es) {
+  const m = new Map();
+  for (const e of es) { if (!m.has(e.date)) m.set(e.date, []); m.get(e.date).push(e); }
+  return m;
 }
 
 // ---------- Workout ----------
@@ -439,7 +560,7 @@ function groupByExercise(es) {
 function viewLog() {
   const today = St.todayISO();
   const day = S.day;
-  const all = mine();
+  const all = targetEntries();
   const es = all.filter((e) => e.date === day);
   const byEx = groupByExercise(es.filter((e) => e.exercise));
   const attendance = es.filter((e) => !e.exercise);
@@ -493,7 +614,7 @@ function viewLog() {
         <button class="icon-btn sm" data-action="del-entry" data-id="${esc(e.id)}" aria-label="${t('common.delete')}">${icon('trash')}</button></div>`).join('')}
       </div>`;
   }
-  return `${installBanner()}${nav}${body}
+  return `${installBanner()}${logForPicker()}${nav}${body}
     ${es.length ? `<button class="fab" data-action="add-ex">${icon('plus')}<span>${t('log.addExercise')}</span></button>` : ''}`;
 }
 
@@ -571,9 +692,9 @@ function metricChips(name, current = metricFor(name), action = 'metric') {
     `<button class="${current === k ? 'on' : ''}" data-action="${action}" data-m="${k}" ${!weighted && k !== 'reps' ? 'disabled' : ''}>${t(`metric.${k}`)}</button>`).join('')}</div>`;
 }
 
-/** My all-time bests for one exercise. Shared by Progress and the exercise sheet. */
-function recordsBlock(name) {
-  const sum = St.exerciseSummary(mine(), name);
+/** All-time bests for one exercise (mine by default). Shared by Progress and the exercise sheet. */
+function recordsBlock(name, entries = mine()) {
+  const sum = St.exerciseSummary(entries, name);
   if (!sum) return `<p class="muted">${t('ex.noHistory')}</p>`;
   const tile = (label, value, date, detail = '') =>
     `<div class="tile"><span>${label}</span><strong>${value}</strong>${date ? `<em>${detail ? `${detail} · ` : ''}${fmtDate(date)}</em>` : ''}</div>`;
@@ -609,7 +730,7 @@ function viewProgress() {
     </div>
     <div class="toolbar">${metricChips(S.exercise)}</div>
     <div class="toolbar">${periodChips()}
-      <label class="switch-label"><span>${t('progress.compare')}</span><span class="switch"><input type="checkbox" data-change="compare" ${S.compare ? 'checked' : ''}><i></i></span></label>
+      ${solo() ? '' : `<label class="switch-label"><span>${t('progress.compare')}</span><span class="switch"><input type="checkbox" data-change="compare" ${S.compare ? 'checked' : ''}><i></i></span></label>`}
     </div>
     <div class="card chart-card"><div class="chart-box"><canvas id="chart" aria-label="${t(`metric.${metric}`)}"></canvas></div>
       <p class="fine">${t(`metric.${metric}.help`)}</p></div>
@@ -618,7 +739,7 @@ function viewProgress() {
       ${recordsBlock(S.exercise)}
     </section>
     <div class="grid two">
-      ${weighted ? `<div class="card">
+      ${weighted && !solo() ? `<div class="card">
         <h3>${t('progress.improvement')}</h3>
         <p class="muted card-sub">${t('progress.improvementSub')}</p>
         <table class="table">
@@ -649,19 +770,20 @@ function mountChart() {
   const accent = css.getPropertyValue('--accent-text').trim();
   const r = St.periodRange(S.period);
   const metric = metricFor(S.exercise);
-  const who = S.compare ? members() : members().filter((m) => m.email === S.me.email);
+  const compare = S.compare && !solo();
+  const who = compare ? members() : members().filter((m) => m.email === S.me.email);
   const datasets = who.map((m) => {
     const data = St.dailySeries(entriesOf(m.email).filter((e) => e.date >= r.from && e.date <= r.to), S.exercise, metric)
       .filter((p) => p.value > 0)
       .map((p) => ({ x: +St.parseISO(p.date), y: Math.round(p.value * 10) / 10 }));
     const me = m.email === S.me.email;
-    const color = me && !S.compare ? accent : m.color;
+    const color = me && !compare ? accent : m.color;
     return {
       label: m.name, data, borderColor: color, backgroundColor: color, tension: 0.3,
       pointRadius: 2.5, pointHoverRadius: 5, borderWidth: me ? 3 : 2,
     };
   }).filter((d) => d.data.length);
-  S.chart = drawChart(canvas, datasets, metric, S.compare);
+  S.chart = drawChart(canvas, datasets, metric, compare);
 }
 
 /** A line chart over time for one metric, styled from the current theme. */
@@ -694,9 +816,9 @@ function drawChart(canvas, datasets, metric, legend) {
 const sheetMetric = (name) => (hasWeight(name) ? S.sheet.metric || 'e1rm' : 'reps');
 
 function sheetRecordsView(name) {
-  if (!mine().some((e) => e.exercise === name)) return `<p class="muted pad">${t('ex.noHistory')}</p>`;
+  if (!targetEntries().some((e) => e.exercise === name)) return `<p class="muted pad">${t('ex.noHistory')}</p>`;
   const metric = sheetMetric(name);
-  return `${recordsBlock(name)}
+  return `${recordsBlock(name, targetEntries())}
     <div class="toolbar sheet-metrics">${metricChips(name, metric, 'sheet-metric')}</div>
     <div class="card chart-card"><div class="chart-box sm"><canvas id="sheet-chart" aria-label="${t(`metric.${metric}`)}"></canvas></div>
       <p class="fine">${t(`metric.${metric}.help`)}</p></div>
@@ -709,10 +831,10 @@ function mountSheetChart() {
   const name = S.sheet.name;
   const metric = sheetMetric(name);
   const color = getComputedStyle(document.documentElement).getPropertyValue('--accent-text').trim();
-  const data = St.dailySeries(mine(), name, metric).filter((p) => p.value > 0)
+  const data = St.dailySeries(targetEntries(), name, metric).filter((p) => p.value > 0)
     .map((p) => ({ x: +St.parseISO(p.date), y: Math.round(p.value * 10) / 10 }));
   S.sheetChart = drawChart(canvas, [{
-    label: S.me.name, data, borderColor: color, backgroundColor: color, tension: 0.3, pointRadius: 3, pointHoverRadius: 5, borderWidth: 3,
+    label: member(target())?.name || S.me.name, data, borderColor: color, backgroundColor: color, tension: 0.3, pointRadius: 3, pointHoverRadius: 5, borderWidth: 3,
   }], metric, false);
 }
 
@@ -923,7 +1045,7 @@ function renderSheet() {
 }
 
 function lastInfo(name) {
-  const s = St.lastSession(mine(), name, '9999-12-31');
+  const s = St.lastSession(targetEntries(), name, '9999-12-31');
   if (!s) return '';
   const top = s.sets.reduce((a, e) => (St.e1rm(e.weight, e.reps) > St.e1rm(a.weight, a.reps) ? e : a));
   return `${fmtW(top.weight)} × ${fmtN(top.reps)} · ${relDay(s.date)}`;
@@ -971,7 +1093,7 @@ function pickerList() {
   if (cat === 'all') {
     // Recent first: what you repeat most at the gym is one tap away.
     const last = new Map();
-    for (const e of mine()) if (e.exercise && (last.get(e.exercise) || '') < e.date) last.set(e.exercise, e.date);
+    for (const e of targetEntries()) if (e.exercise && (last.get(e.exercise) || '') < e.date) last.set(e.exercise, e.date);
     const recent = [...last].sort((a, b) => (a[1] < b[1] ? 1 : -1)).slice(0, 8).map(([name]) => Ex.exerciseInfo(name));
     if (recent.length) html += `<h3 class="list-head">${t('picker.recent')}</h3>${recent.map(pickRow).join('')}`;
     for (const c of Ex.CATEGORIES) {
@@ -985,7 +1107,7 @@ function pickerList() {
 
 /** Starting values: today's last set or, failing that, the first set of the previous session. */
 function defaultsFor(name) {
-  const es = mine();
+  const es = targetEntries();
   const today = es.filter((e) => e.exercise === name && e.date === S.day);
   if (today.length) { const e = today[today.length - 1]; return { w: e.weight, r: e.reps }; }
   const last = St.lastSession(es, name, S.day);
@@ -1006,7 +1128,7 @@ function exerciseSheet() {
   return `<header class="sheet-head">
       <button class="icon-btn" data-action="close-sheet" aria-label="${t('common.back')}">${icon('left')}</button>
       <div class="sheet-title"><h2>${esc(Ex.exName(name))}</h2>
-        <span class="muted"><span class="cat-dot" style="--c:${cat.color}"></span>${esc(Ex.catLabel(cat))} · ${S.day === today ? t('day.today') : fmtLong(S.day)}</span></div>
+        <span class="muted"><span class="cat-dot" style="--c:${cat.color}"></span>${esc(Ex.catLabel(cat))} · ${S.day === today ? t('day.today') : fmtLong(S.day)}${target() !== S.me.email ? ` · <strong class="for-who">${esc(member(target())?.name || '')}</strong>` : ''}</span></div>
       <button class="icon-btn" data-action="timer-settings" aria-label="${t('timer.title')}">${icon('timer')}</button>
     </header>
     <div class="seg wide">${['log', 'history', 'records'].map((v) =>
@@ -1030,7 +1152,7 @@ function stepper(field, label, value, unit) {
 
 function exerciseLogView(name) {
   const sh = S.sheet;
-  const all = mine();
+  const all = targetEntries();
   const todays = all.filter((e) => e.exercise === name && e.date === S.day);
   const prs = St.prIds(all);
   const last = St.lastSession(all, name, S.day);
@@ -1063,7 +1185,7 @@ function exerciseLogView(name) {
 }
 
 function exerciseHistoryView(name) {
-  const all = mine();
+  const all = targetEntries();
   const hist = St.exerciseHistory(all, name);
   if (!hist.length) return `<p class="muted pad">${t('ex.noHistory')}</p>`;
   const prs = St.prIds(all);
@@ -1126,19 +1248,20 @@ function saveSet() {
   const weight = Math.max(0, numIn(sh.w));
   if (!reps || reps < 1) { toast(t('ex.needReps'), { error: true }); document.getElementById('in-r')?.focus(); return; }
   const gid = S.group.id;
+  const who = target();
   if (sh.edit) {
-    const old = S.group.entries.find((e) => e.id === sh.edit && e.email === S.me.email);
+    const old = S.group.entries.find((e) => e.id === sh.edit && e.email === who);
     if (old) {
       Object.assign(old, { weight, reps });
-      S.outbox.update(gid, { id: old.id, date: old.date, exercise: old.exercise, sets: old.sets || 1, reps, weight, notes: old.notes || '' });
+      S.outbox.update(gid, { id: old.id, date: old.date, exercise: old.exercise, sets: old.sets || 1, reps, weight, notes: old.notes || '' }, who);
     }
     sh.edit = null;
     toast(t('ex.updated'), { ic: 'check' });
   } else {
     const entry = { id: uid(), date: S.day, exercise: sh.name, sets: 1, reps, weight, notes: '' };
-    S.group.entries.push({ ...entry, email: S.me.email });
-    S.outbox.add(gid, entry);
-    if (St.prIds(mine()).has(entry.id)) toast(t('ex.newPr'), { ic: 'trophy' });
+    S.group.entries.push({ ...entry, email: who });
+    S.outbox.add(gid, entry, who);
+    if (St.prIds(targetEntries()).has(entry.id)) toast(t('ex.newPr'), { ic: 'trophy' });
     // Only while actually training: back-filling a past day doesn't need rest.
     if (prefs.autoRest && S.day === St.todayISO()) Timer.start(prefs.rest);
     navigator.vibrate?.(20);
@@ -1311,6 +1434,8 @@ function groupSettingsModal() {
       </li>`).join('')}</ul>` : `<p class="muted">${t('gs.noPending')}</p>`}
       <button class="btn ghost block" data-action="invite">${icon('userPlus')} ${t('group.invite')}</button>
     </section>
+    <label class="setting row"><span><span class="setting-label">${t('gs.openLogging')}</span><span class="fine">${t('gs.openLoggingHelp')}</span></span>
+      <span class="switch"><input type="checkbox" data-change="open-logging" ${g.openLogging ? 'checked' : ''}><i></i></span></label>
     <div class="danger-zone">
       <button class="btn ghost danger-text" data-action="group-delete">${icon('trash')} ${t('gs.delete')}</button>
       <p class="fine">${t('gs.deleteNote')}</p>
@@ -1369,21 +1494,21 @@ function armed(el, label) {
 }
 
 /** Deletes my entries by id and returns a function that puts them back where they were. */
-function removeEntries(ids) {
+function removeEntries(ids, who = target()) {
   const gid = S.group.id;
   const removed = [];
   S.group.entries = S.group.entries.filter((e, i) => {
-    const hit = ids.includes(e.id) && e.email === S.me.email;
+    const hit = ids.includes(e.id) && e.email === who;
     if (hit) removed.push([i, e]);
     return !hit;
   });
-  for (const id of ids) S.outbox.remove(gid, id);
+  for (const id of ids) S.outbox.remove(gid, id, who);
   return () => {
     if (S.group?.id !== gid) return;
     for (const [i, e] of removed) {
       S.group.entries.splice(Math.min(i, S.group.entries.length), 0, e);
       const { email, ...entry } = e;
-      S.outbox.add(gid, entry);
+      S.outbox.add(gid, entry, email);
     }
     render();
     if (S.sheet) renderSheet();
@@ -1415,7 +1540,7 @@ const actions = {
     closeModal();
     Timer.stop();
     if (S.store?.kind === 'google') { G.signOut(); clearCache(); }
-    Object.assign(S, { store: null, me: null, groups: [], group: null, outbox: null, needsPicker: null, tab: 'log', sheet: null, day: St.todayISO() });
+    Object.assign(S, { store: null, me: null, groups: [], group: null, outbox: null, needsPicker: null, tab: 'home', logFor: '', sheet: null, day: St.todayISO() });
     renderSheet();
     render();
   },
@@ -1450,7 +1575,7 @@ const actions = {
   'del-entry': (el) => { deleteWithUndo([el.dataset.id], t('log.attendanceDeleted')); render(); },
   'del-exercise': (el) => {
     const name = el.dataset.name;
-    const ids = mine().filter((e) => e.exercise === name && e.date === S.day).map((e) => e.id);
+    const ids = targetEntries().filter((e) => e.exercise === name && e.date === S.day).map((e) => e.id);
     if (!ids.length) return;
     deleteWithUndo(ids, t('log.exerciseDeleted', { name: Ex.exName(name) }));
     if (S.sheet) { S.sheet.edit = null; renderSheet(); }
@@ -1483,7 +1608,7 @@ const actions = {
   'save-set': saveSet,
   'edit-set': (el) => {
     readSteppers();
-    const e = mine().find((x) => x.id === el.dataset.id);
+    const e = targetEntries().find((x) => x.id === el.dataset.id);
     if (!e) return;
     if (S.sheet.edit === e.id) { S.sheet.edit = null; } else { Object.assign(S.sheet, { edit: e.id, w: e.weight, r: e.reps }); }
     renderSheet();
@@ -1509,6 +1634,15 @@ const actions = {
   reconnect: () => reconnect(),
   'sync-error': () => syncErrorModal(),
   'group-settings': () => openGroupSettings(),
+  'log-for': (el) => { S.logFor = el.dataset.e === S.me.email ? '' : el.dataset.e; render(); },
+  'create-solo': () => run(async () => {
+    const id = await S.store.createGroup(t('groups.soloName'));
+    S.groups = await S.store.listGroups();
+    S.tab = 'home';
+    await openGroup(id);
+  }),
+  'start-workout': () => { S.tab = 'log'; S.day = St.todayISO(); render(); openSheet({ kind: 'picker', q: '', cat: 'all' }); },
+  'go-log': () => { S.tab = 'log'; S.day = St.todayISO(); render(); window.scrollTo({ top: 0 }); },
   'toggle-info': (el) => {
     const box = document.getElementById(el.getAttribute('aria-controls'));
     if (!box) return;
@@ -1699,6 +1833,16 @@ document.addEventListener('change', (e) => {
   const el = e.target;
   if (el.dataset?.change === 'exercise') { S.exercise = el.value; render(); }
   if (el.dataset?.change === 'compare') { S.compare = el.checked; render(); }
+  if (el.dataset?.change === 'open-logging') {
+    const open = el.checked;
+    const gid = S.group.id;
+    run(async () => {
+      await S.store.setOpenLogging(gid, open);
+      await openGroup(gid);
+      groupSettingsModal();
+      toast(open ? t('gs.openOn') : t('gs.openOff'), { ic: 'check' });
+    });
+  }
   if (el.dataset?.change === 'day' && St.isISODate(el.value)) { S.day = el.value > St.todayISO() ? St.todayISO() : el.value; render(); }
   if (el.dataset?.prefToggle) { prefs[el.dataset.prefToggle] = el.checked; savePrefs(); }
 });
