@@ -20,35 +20,12 @@ const STEP_OPTIONS = [1, 1.25, 2.5, 5];
 
 // ---------- per-device preferences ----------
 const PREFS_KEY = 'gt:prefs';
-const prefs = { rest: 90, autoRest: true, notify: false, step: 2.5, theme: 'system', accent: 'lime' };
+const prefs = { rest: 90, autoRest: true, notify: false, volume: 0.8, vibration: 2, step: 2.5, theme: 'system' };
 try { Object.assign(prefs, JSON.parse(localStorage.getItem(PREFS_KEY) || '{}')); } catch { /* no storage */ }
 const savePrefs = () => { try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch { /* ignore */ } };
-// Accent colours: [accent, text on accent, accent as text, soft accent background] for light and dark.
-// Each pair passes WCAG AA (4.5:1). Lime is the brand colour; the logo stays lime whatever you pick.
-const ACCENTS = {
-  lime: { light: ['#C8F04A', '#0B0B0D', '#4A6800', '#EDF7CC'], dark: ['#C8F04A', '#0B0B0D', '#C8F04A', 'rgb(200 240 74 / .12)'] },
-  blue: { light: ['#2F6FEB', '#FFFFFF', '#1D55C4', '#E2EBFD'], dark: ['#6E9BFF', '#0A1330', '#8DB0FF', 'rgb(110 155 255 / .15)'] },
-  orange: { light: ['#FF8A3D', '#1F0E00', '#A94700', '#FFE7D6'], dark: ['#FF9A55', '#1F0E00', '#FFAA6E', 'rgb(255 154 85 / .15)'] },
-  pink: { light: ['#DB2777', '#FFFFFF', '#BE185D', '#FCE4F0'], dark: ['#FF6FAE', '#2A0716', '#FF8DBE', 'rgb(255 111 174 / .15)'] },
-  violet: { light: ['#7C4DFF', '#FFFFFF', '#5B2EE0', '#ECE5FF'], dark: ['#A58BFF', '#140B33', '#B9A5FF', 'rgb(165 139 255 / .16)'] },
-  teal: { light: ['#14B8A6', '#04211D', '#0B7A6E', '#D5F4EF'], dark: ['#2DD4BF', '#04211D', '#5EE6D3', 'rgb(45 212 191 / .15)'] },
-};
-(function injectAccents() {
-  const vars = ([a, ink, text, soft]) => `--accent:${a};--accent-ink:${ink};--accent-text:${text};--accent-soft:${soft};`;
-  const css = Object.entries(ACCENTS).filter(([k]) => k !== 'lime').map(([k, v]) => `
-:root[data-accent="${k}"]{${vars(v.light)}--accent-on-dark:${v.dark[0]};--accent-on-dark-ink:${v.dark[1]};}
-@media (prefers-color-scheme: dark){:root[data-accent="${k}"]:not([data-theme="light"]){${vars(v.dark)}}}
-:root[data-accent="${k}"][data-theme="dark"]{${vars(v.dark)}}`).join('');
-  const style = document.createElement('style');
-  style.textContent = css;
-  document.head.appendChild(style);
-})();
-
 function applyTheme() {
   if (prefs.theme === 'system') delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = prefs.theme;
-  if (ACCENTS[prefs.accent] && prefs.accent !== 'lime') document.documentElement.dataset.accent = prefs.accent;
-  else delete document.documentElement.dataset.accent;
   const dark = prefs.theme === 'dark' || (prefs.theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
   document.querySelector('meta[name=theme-color]')?.setAttribute('content', dark ? '#0B0B0D' : '#F7F7F5');
 }
@@ -196,22 +173,24 @@ function restoreSession() {
   startSession(new G.SheetStore(sess.me), sess.me, `gt:outbox:${sess.me.email}`);
   const cache = readJSON(cacheKey(sess.me.email));
   S.groups = cache?.groups || [];
-  if (cache?.group?.id) {
-    const g = cache.group;
-    g.entries = S.outbox.apply(g.id, g.entries || []);
-    assignColors(g);
-    Ex.setCustomExercises(g.exercises || []);
-    S.group = g;
-    S.profile = S.me.email;
-  }
+  if (cache?.group?.id) showCachedGroup(cache.group);
   render();
   // With a still-valid token, refresh in the background to pick up friends' new workouts.
   if (G.tokenValid()) run(async () => { S.outbox.flush(); S.groups = await S.store.listGroups(); await (S.group ? openGroup(S.group.id) : afterLogin()); });
   return true;
 }
 
-async function afterLogin() {
-  S.groups = await S.store.listGroups();
+/** Shows a group from the device copy (pending changes applied) while fresh data loads. */
+function showCachedGroup(g) {
+  g.entries = S.outbox.apply(g.id, g.entries || []);
+  assignColors(g);
+  Ex.setCustomExercises(g.exercises || []);
+  S.group = g;
+  S.profile = S.me.email;
+}
+
+async function afterLogin(groups) {
+  S.groups = groups || await S.store.listGroups();
   S.outbox.flush();
   if (S.pendingGroup) return openPending(S.pendingGroup);
   const last = ls.get('gt:lastGroup');
@@ -270,6 +249,7 @@ function renderSync() {
 function render() {
   if (S.chart) { S.chart.destroy(); S.chart = null; }
   document.documentElement.lang = getLang();
+  if (S.booting) { $app.innerHTML = bootScreen(); return; }
   if (!S.store) { $app.innerHTML = landing(); return; }
   let body;
   if (S.needsPicker) body = joinScreen();
@@ -291,6 +271,11 @@ function view() {
     case 'group': return viewGroup();
     default: return viewLog();
   }
+}
+
+/** Shown between closing Google's sign-in window and the first data. */
+function bootScreen() {
+  return `<main class="boot" aria-busy="true">${logo(56)}<span class="spinner" aria-hidden="true"></span><p>${t('boot.loading')}</p></main>`;
 }
 
 function langToggle() {
@@ -1329,7 +1314,7 @@ function saveSet() {
     S.outbox.add(gid, entry, who);
     if (St.prIds(targetEntries()).has(entry.id)) toast(t('ex.newPr'), { ic: 'trophy' });
     // Only while actually training: back-filling a past day doesn't need rest.
-    if (prefs.autoRest && S.day === St.todayISO()) Timer.start(prefs.rest, { notify: prefs.notify });
+    if (prefs.autoRest && S.day === St.todayISO()) Timer.start(prefs.rest, timerOptions());
     navigator.vibrate?.(20);
   }
   // Expired session: renew it using this click (Google's popup needs a user gesture).
@@ -1360,9 +1345,23 @@ function restSettings() {
       ${segPref('rest', REST_OPTIONS.map((s) => [s, `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`]))}</div>
     <label class="setting row"><span><span class="setting-label">${t('timer.auto')}</span><span class="fine">${t('timer.autoHelp')}</span></span>
       <span class="switch"><input type="checkbox" data-pref-toggle="autoRest" ${prefs.autoRest ? 'checked' : ''}><i></i></span></label>
+    <div class="setting">
+      <span class="setting-label">${t('timer.volume')} <span class="setting-value" id="volume-value">${Math.round(prefs.volume * 100)} %</span></span>
+      <div class="slider-row">${icon('volume')}<input type="range" min="0" max="100" step="5" value="${Math.round(prefs.volume * 100)}" data-range="volume" aria-label="${t('timer.volume')}">
+        <button type="button" class="btn ghost sm" data-action="test-sound">${t('timer.test')}</button></div>
+      <span class="fine">${t('timer.volumeHelp')}</span>
+    </div>
+    <div class="setting">
+      <span class="setting-label">${t('timer.vibration')} <span class="setting-value" id="vibration-value">${t(`timer.vib${prefs.vibration}`)}</span></span>
+      <div class="slider-row">${icon('vibrate')}<input type="range" min="0" max="3" step="1" value="${prefs.vibration}" data-range="vibration" aria-label="${t('timer.vibration')}">
+        <button type="button" class="btn ghost sm" data-action="test-vibration">${t('timer.test')}</button></div>
+      <span class="fine">${t('timer.vibrationHelp')}</span>
+    </div>
     <label class="setting row"><span><span class="setting-label">${t('timer.notify')}</span><span class="fine">${t('timer.notifyHelp')}</span></span>
       <span class="switch"><input type="checkbox" data-pref-toggle="notify" ${prefs.notify && notificationsGranted() ? 'checked' : ''}><i></i></span></label>`;
 }
+
+const timerOptions = () => ({ notify: prefs.notify, volume: prefs.volume, vibration: prefs.vibration });
 
 const notificationsGranted = () => 'Notification' in window && Notification.permission === 'granted';
 
@@ -1384,9 +1383,6 @@ function settingsModal() {
       <div><h3>${esc(me.name)}</h3><p class="muted">${esc(me.email)}</p></div></div>
     <div class="setting"><span class="setting-label">${t('settings.language')}</span>
       <div class="seg wide">${[['es', 'Español'], ['en', 'English']].map(([v, l]) => `<button class="${getLang() === v ? 'on' : ''}" data-action="lang" data-lang="${v}">${l}</button>`).join('')}</div></div>
-    <div class="setting"><span class="setting-label">${t('settings.accent')}</span>
-      <div class="swatches">${Object.entries(ACCENTS).map(([k, v]) => `<button class="swatch ${prefs.accent === k ? 'on' : ''}" style="--sw:${v.light[0]};--swink:${v.light[1]}"
-        data-action="pref" data-k="accent" data-v="${k}" aria-label="${t(`accent.${k}`)}" title="${t(`accent.${k}`)}">${icon('check')}</button>`).join('')}</div></div>
     <div class="setting"><span class="setting-label">${t('settings.theme')}</span>
       ${segPref('theme', [['system', t('settings.system')], ['light', t('settings.light')], ['dark', t('settings.dark')]])}</div>
     <div class="setting"><span class="setting-label">${t('settings.step')}</span>
@@ -1609,12 +1605,31 @@ function deleteWithUndo(ids, message) {
 
 const actions = {
   login: () => run(async () => {
-    await G.signIn(); // first line: must run right in the click so the popup isn't blocked
-    const me = await G.getProfile();
-    startSession(new G.SheetStore(me), me, `gt:outbox:${me.email}`);
-    saveCache();
-    G.loadPicker().catch(() => {});
-    await afterLogin();
+    const signingIn = G.signIn(); // first line: the popup must open right in the click or it gets blocked
+    // The loading screen goes up behind Google's window at once; closing the window brings the landing back.
+    S.booting = true;
+    render();
+    try {
+      await signingIn;
+      // Profile and group list don't depend on each other: fetch both at once.
+      const store = new G.SheetStore(null);
+      const [me, groups] = await Promise.all([G.getProfile(), store.listGroups()]);
+      store.me = me;
+      startSession(store, me, `gt:outbox:${me.email}`);
+      S.groups = groups;
+      // Signed in on this device before: show the last copy of the group now, refresh behind it.
+      const cache = readJSON(cacheKey(me.email));
+      if (!S.pendingGroup && cache?.group?.id && groups.some((g) => g.id === cache.group.id)) {
+        showCachedGroup(cache.group);
+        S.booting = false;
+        render();
+      }
+      saveCache();
+      G.loadPicker().catch(() => {});
+      await afterLogin(groups);
+    } finally {
+      if (S.booting) { S.booting = false; render(); }
+    }
   }),
   demo: () => run(async () => {
     const store = new DemoStore();
@@ -1646,9 +1661,8 @@ const actions = {
   },
   pref: (el) => {
     const k = el.dataset.k;
-    prefs[k] = k === 'theme' || k === 'accent' ? el.dataset.v : Number(el.dataset.v);
+    prefs[k] = k === 'theme' ? el.dataset.v : Number(el.dataset.v);
     savePrefs();
-    if (k === 'accent') { applyTheme(); render(); if (S.sheet) renderSheet(); }
     if (k === 'theme') { applyTheme(); render(); }
     el.parentElement.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === el));
   },
@@ -1716,7 +1730,9 @@ const actions = {
     renderSheet();
   },
   'timer-settings': () => timerModal(),
-  'timer-start': () => { Timer.start(prefs.rest, { notify: prefs.notify }); closeModal(); },
+  'timer-start': () => { Timer.start(prefs.rest, timerOptions()); closeModal(); },
+  'test-sound': () => Timer.testSound(prefs.volume),
+  'test-vibration': () => Timer.testVibration(prefs.vibration),
   'timer-stop': () => { Timer.stop(); closeModal(); },
   'new-challenge': () => challengeModal(),
   'group-menu': () => groupMenu(),
@@ -1920,6 +1936,17 @@ document.addEventListener('submit', (e) => {
   forms[f.dataset.form]?.(f);
 });
 document.addEventListener('input', (e) => {
+  const range = e.target.dataset?.range;
+  if (range === 'volume') {
+    prefs.volume = Number(e.target.value) / 100;
+    document.getElementById('volume-value').textContent = `${e.target.value} %`;
+    savePrefs();
+  } else if (range === 'vibration') {
+    prefs.vibration = Number(e.target.value);
+    document.getElementById('vibration-value').textContent = t(`timer.vib${prefs.vibration}`);
+    savePrefs();
+    Timer.testVibration(prefs.vibration); // feel it while choosing
+  }
   if (e.target.id === 'picker-q') { S.sheet.q = e.target.value; refreshPicker(); }
   if (e.target.classList?.contains('step-input')) readSteppers();
 });

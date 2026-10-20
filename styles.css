@@ -528,17 +528,17 @@ body:has(#restbar.show) .fab { bottom: calc(var(--nav-h) + var(--safe-b) + 92px)
 button.appbar-logo { display: inline-flex; }
 button.nav-brand { text-align: left; }
 
-/* Accent colour swatches (Settings) */
-.swatches { display: flex; flex-wrap: wrap; gap: 10px; }
-.swatch {
-  display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border-radius: 50%; border: 3px solid var(--surface);
-  background: var(--sw); color: var(--swink); box-shadow: 0 0 0 1px var(--line); transition: box-shadow .15s, transform .08s;
-}
-.swatch .ic { width: 18px; height: 18px; stroke-width: 3; opacity: 0; }
-.swatch.on { box-shadow: 0 0 0 2px var(--text); }
-.swatch.on .ic { opacity: 1; }
-.swatch:active { transform: scale(.94); }
-@media (pointer: coarse) { .swatch { width: 44px; height: 44px; } }
+/* Loading screen after sign-in */
+.boot { min-height: 100svh; display: grid; place-content: center; justify-items: center; gap: 18px; color: var(--muted); font-weight: 600; }
+.spinner { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--surface-3); border-top-color: var(--accent-text); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Sliders (timer volume and vibration) */
+.setting-value { margin-left: 6px; font-weight: 600; color: var(--accent-text); }
+.slider-row { display: flex; align-items: center; gap: 12px; }
+.slider-row > .ic { color: var(--muted); }
+.slider-row input[type=range] { flex: 1; height: 44px; padding: 0; border: 0; background: none; box-shadow: none; accent-color: var(--accent-text); }
+.slider-row .btn { flex: none; }
 
 .btn.danger-solid { background: var(--danger); border-color: var(--danger); color: #fff; }
 .member-list { list-style: none; margin: 0 0 10px; padding: 0; display: grid; }

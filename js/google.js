@@ -319,13 +319,13 @@ export class SheetStore {
   }
 
   async loadGroup(id) {
-    const [{ title, tabs }, file] = await Promise.all([this.tabs(id), this.file(id)]);
+    // Three independent reads in parallel: saves a round trip on every load.
+    const [{ title, tabs }, file, openLogging] = await Promise.all([this.tabs(id), this.file(id), this.#openLogging(id)]);
     const ownerEmail = file.owners?.[0]?.emailAddress?.toLowerCase();
     // Safety net: the owner closes the sheet so other members can't re-share it.
     if (file.ownedByMe && file.writersCanShare !== false) {
       api(`${DRIVE}/${id}`, { method: 'PATCH', body: { writersCanShare: false } }).catch(() => {});
     }
-    const openLogging = await this.#openLogging(id);
     const userTabs = [];
     const suspicious = [];
     for (const tab of tabs) {

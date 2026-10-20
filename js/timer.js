@@ -16,7 +16,38 @@ let doneTimer = null;
 let audio = null;
 let wakeLock = null;
 let notify = false;
+let volume = 0.8;
+let vibration = 2;
+let master = null;
 let lastCountdown = 0;
+
+// Web pages can't set vibration strength, only its length and repeats: these are the levels.
+const VIBRATION = {
+  0: { alarm: null, tick: null },
+  1: { alarm: [200, 100, 200], tick: [30] },
+  2: { alarm: [500, 200, 500, 200, 500], tick: [60] },
+  3: { alarm: [900, 150, 900, 150, 900, 150, 900], tick: [140] },
+};
+const buzz = (pattern) => { if (pattern) navigator.vibrate?.(pattern); };
+
+function ensureAudio() {
+  try {
+    audio ||= new (window.AudioContext || window.webkitAudioContext)();
+    audio.resume?.();
+    if (!master) {
+      // Volume → limiter → speakers. Driving the limiter hard makes it loud without clipping.
+      master = audio.createGain();
+      const limiter = audio.createDynamicsCompressor();
+      limiter.threshold.value = -8;
+      limiter.knee.value = 0;
+      limiter.ratio.value = 20;
+      limiter.attack.value = 0.002;
+      limiter.release.value = 0.08;
+      master.connect(limiter).connect(audio.destination);
+    }
+    master.gain.value = volume * 2.2;
+  } catch { audio = null; master = null; }
+}
 
 const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 export const isRunning = () => end > Date.now();
@@ -32,31 +63,40 @@ function tone(freq, at, length, gain, type = 'square') {
   g.gain.exponentialRampToValueAtTime(gain, ctx.currentTime + at + 0.015);
   g.gain.setValueAtTime(gain, ctx.currentTime + at + length - 0.03);
   g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + at + length);
-  o.connect(g).connect(ctx.destination);
+  o.connect(g).connect(master);
   o.start(ctx.currentTime + at);
   o.stop(ctx.currentTime + at + length + 0.02);
 }
 
 function alarm() {
   try {
-    if (!audio) return;
-    audio.resume?.();
-    // Two rounds of three rising beeps.
-    for (const round of [0, 0.9]) {
-      tone(880, round, 0.16, 0.45);
-      tone(880, round + 0.22, 0.16, 0.45);
-      tone(1320, round + 0.44, 0.3, 0.5);
+    if (!audio || !volume) return;
+    ensureAudio();
+    // Three rounds of three rising beeps, each with an octave on top so it cuts through gym music.
+    for (const round of [0, 0.85, 1.7]) {
+      for (const [at, f, len] of [[0, 880, 0.16], [0.22, 880, 0.16], [0.44, 1320, 0.3]]) {
+        tone(f, round + at, len, 0.7);
+        tone(f * 2, round + at, len, 0.25);
+      }
     }
   } catch { /* no audio */ }
 }
 
 function countdownBeep() {
   try {
-    if (!audio) return;
-    audio.resume?.();
-    tone(660, 0, 0.09, 0.3);
+    if (!audio || !volume) return;
+    ensureAudio();
+    tone(660, 0, 0.1, 0.55);
   } catch { /* no audio */ }
 }
+
+/** "Test" buttons in Settings. Called from a tap, so the browser allows sound. */
+export function testSound(v) {
+  volume = v;
+  ensureAudio();
+  alarm();
+}
+export function testVibration(level) { buzz(VIBRATION[level]?.alarm); }
 
 /** System notification, only useful when the app is in the background. Needs the service worker on Android. */
 async function notifyDone() {
@@ -66,7 +106,7 @@ async function notifyDone() {
     const reg = await navigator.serviceWorker.ready;
     await reg.showNotification(t('timer.done'), {
       body: t('timer.notifBody'), tag: 'gymtracker-rest', renotify: true,
-      icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', vibrate: [500, 200, 500, 200, 500],
+      icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', ...(VIBRATION[vibration].alarm ? { vibrate: VIBRATION[vibration].alarm } : { silent: false }),
     });
   } catch { /* notifications unavailable */ }
 }
@@ -105,7 +145,7 @@ function paint() {
   if (left <= 3 && left !== lastCountdown && document.visibilityState === 'visible') {
     lastCountdown = left;
     countdownBeep();
-    navigator.vibrate?.(60);
+    buzz(VIBRATION[vibration].tick);
   }
 }
 
@@ -115,7 +155,7 @@ function finish() {
   end = 0;
   keepAwake(false);
   alarm();
-  navigator.vibrate?.([500, 200, 500, 200, 500]);
+  buzz(VIBRATION[vibration].alarm);
   notifyDone();
   $bar.className = 'restbar show done';
   $bar.innerHTML = `<div class="restbar-row"><span class="restbar-label">${icon('check')} ${t('timer.done')}</span>
@@ -133,14 +173,14 @@ function schedule() {
 /**
  * Starts (or restarts) the rest. Call it from a click so the browser allows sound.
  * @param {number} seconds
- * @param {{ notify?: boolean }} [opts] show a system notification if it ends while the app is in the background
+ * @param {{ notify?: boolean, volume?: number, vibration?: number }} [opts] notify: system notification if it
+ *   ends while the app is in the background; volume 0–1; vibration level 0–3
  */
 export function start(seconds, opts = {}) {
-  try {
-    audio ||= new (window.AudioContext || window.webkitAudioContext)();
-    audio.resume?.();
-  } catch { audio = null; }
   notify = Boolean(opts.notify);
+  volume = opts.volume ?? volume;
+  vibration = VIBRATION[opts.vibration] ? opts.vibration : vibration;
+  ensureAudio();
   clearTimeout(doneTimer);
   total = seconds;
   end = Date.now() + seconds * 1000;
