@@ -20,12 +20,35 @@ const STEP_OPTIONS = [1, 1.25, 2.5, 5];
 
 // ---------- per-device preferences ----------
 const PREFS_KEY = 'gt:prefs';
-const prefs = { rest: 90, autoRest: true, step: 2.5, theme: 'system' };
+const prefs = { rest: 90, autoRest: true, step: 2.5, theme: 'system', accent: 'lime' };
 try { Object.assign(prefs, JSON.parse(localStorage.getItem(PREFS_KEY) || '{}')); } catch { /* no storage */ }
 const savePrefs = () => { try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch { /* ignore */ } };
+// Accent colours: [accent, text on accent, accent as text, soft accent background] for light and dark.
+// Each pair passes WCAG AA (4.5:1). Lime is the brand colour; the logo stays lime whatever you pick.
+const ACCENTS = {
+  lime: { light: ['#C8F04A', '#0B0B0D', '#4A6800', '#EDF7CC'], dark: ['#C8F04A', '#0B0B0D', '#C8F04A', 'rgb(200 240 74 / .12)'] },
+  blue: { light: ['#2F6FEB', '#FFFFFF', '#1D55C4', '#E2EBFD'], dark: ['#6E9BFF', '#0A1330', '#8DB0FF', 'rgb(110 155 255 / .15)'] },
+  orange: { light: ['#FF8A3D', '#1F0E00', '#A94700', '#FFE7D6'], dark: ['#FF9A55', '#1F0E00', '#FFAA6E', 'rgb(255 154 85 / .15)'] },
+  pink: { light: ['#DB2777', '#FFFFFF', '#BE185D', '#FCE4F0'], dark: ['#FF6FAE', '#2A0716', '#FF8DBE', 'rgb(255 111 174 / .15)'] },
+  violet: { light: ['#7C4DFF', '#FFFFFF', '#5B2EE0', '#ECE5FF'], dark: ['#A58BFF', '#140B33', '#B9A5FF', 'rgb(165 139 255 / .16)'] },
+  teal: { light: ['#14B8A6', '#04211D', '#0B7A6E', '#D5F4EF'], dark: ['#2DD4BF', '#04211D', '#5EE6D3', 'rgb(45 212 191 / .15)'] },
+};
+(function injectAccents() {
+  const vars = ([a, ink, text, soft]) => `--accent:${a};--accent-ink:${ink};--accent-text:${text};--accent-soft:${soft};`;
+  const css = Object.entries(ACCENTS).filter(([k]) => k !== 'lime').map(([k, v]) => `
+:root[data-accent="${k}"]{${vars(v.light)}--accent-on-dark:${v.dark[0]};--accent-on-dark-ink:${v.dark[1]};}
+@media (prefers-color-scheme: dark){:root[data-accent="${k}"]:not([data-theme="light"]){${vars(v.dark)}}}
+:root[data-accent="${k}"][data-theme="dark"]{${vars(v.dark)}}`).join('');
+  const style = document.createElement('style');
+  style.textContent = css;
+  document.head.appendChild(style);
+})();
+
 function applyTheme() {
   if (prefs.theme === 'system') delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = prefs.theme;
+  if (ACCENTS[prefs.accent] && prefs.accent !== 'lime') document.documentElement.dataset.accent = prefs.accent;
+  else delete document.documentElement.dataset.accent;
   const dark = prefs.theme === 'dark' || (prefs.theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
   document.querySelector('meta[name=theme-color]')?.setAttribute('content', dark ? '#0B0B0D' : '#F7F7F5');
 }
@@ -100,7 +123,7 @@ function hideToast() {
   $toast.className = '';
   if (popover) setTimeout(() => { if (!$toast.classList.contains('show')) try { $toast.hidePopover(); } catch { /* already hidden */ } }, 250);
 }
-function toast(msg, { error = false, action, onAction, ic } = {}) {
+function toast(msg, { error = false, action, onAction, ic, duration } = {}) {
   clearTimeout(toastTimer);
   if (popover) {
     try { $toast.hidePopover(); } catch { /* not shown */ }
@@ -109,7 +132,7 @@ function toast(msg, { error = false, action, onAction, ic } = {}) {
   $toast.className = `show${error ? ' error' : ''}`;
   $toast.innerHTML = `${ic ? icon(ic) : ''}<span>${esc(msg)}</span>${action ? `<button class="toast-btn" data-toast-action>${esc(action)}</button>` : ''}`;
   if (action) $toast.querySelector('[data-toast-action]').onclick = () => { hideToast(); onAction(); };
-  toastTimer = setTimeout(hideToast, action ? 15000 : error ? 10000 : 3500);
+  toastTimer = setTimeout(hideToast, duration ?? (action ? 15000 : error ? 10000 : 3500));
 }
 
 async function run(fn) {
@@ -277,7 +300,6 @@ function langToggle() {
 
 function landing() {
   const configured = G.isConfigured();
-  const hint = G.savedHint();
   return `<main class="landing">
     <header class="landing-top">
       <div class="brand">${logo(34)}<span class="wordmark">GymTracker</span></div>
@@ -291,7 +313,7 @@ function landing() {
         ${S.pendingGroup ? `<p class="pill-note">${icon('userPlus')} ${t('landing.invited')}</p>` : ''}
         <div class="cta">
           ${configured
-            ? `<button class="btn-google" data-action="login">${googleG}<span>${hint ? t('landing.continueAs', { email: esc(hint) }) : t('landing.google')}</span></button>`
+            ? `<button class="btn-google" data-action="login">${googleG}<span>${t('landing.google')}</span></button>`
             : `<div class="notice">${t('landing.notConfigured')}</div>`}
           <button class="btn ghost lg" data-action="demo">${t('landing.demo')}</button>
         </div>
@@ -1010,22 +1032,66 @@ function viewMembers() {
 }
 
 // ---------- Full-screen sheets: exercise picker and set logger ----------
+// ---------- Back button ----------
+// Like a native Android app: back closes an open modal, then the exercise sheet, then returns from any
+// tab to Home; only on Home does it leave the app. Each layer adds one history entry. Closing a layer
+// from the UI pops its entry; history.back() is async, so pushes made meanwhile wait in a queue.
+const nav = { tab: false, sheet: false, modal: false, pendingBacks: 0, queue: [], fromPop: false };
+function navPush(state) {
+  if (nav.pendingBacks) nav.queue.push(state);
+  else history.pushState(state, '');
+}
+function navPop() {
+  nav.pendingBacks++;
+  history.back();
+}
+window.addEventListener('popstate', () => {
+  if (nav.pendingBacks) {
+    // One of our own pops: replay any pushes made while it was in flight.
+    if (--nav.pendingBacks === 0) { for (const s of nav.queue) history.pushState(s, ''); nav.queue = []; }
+    return;
+  }
+  if ($modal.open && nav.modal) {
+    nav.modal = false;
+    nav.fromPop = true;
+    $modal.close();
+    nav.fromPop = false;
+  } else if (S.sheet && nav.sheet) {
+    nav.sheet = false;
+    S.sheet = null;
+    renderSheet();
+    render();
+  } else if (nav.tab) {
+    nav.tab = false;
+    S.tab = 'home';
+    render();
+    window.scrollTo({ top: 0 });
+  }
+});
+$modal.addEventListener('close', () => {
+  if (nav.modal && !nav.fromPop) { nav.modal = false; navPop(); }
+});
+
+/** Switches tab. Leaving Home adds one history entry, so back returns to Home from any tab. */
+function setTab(tab) {
+  if (tab === S.tab) return;
+  if (tab === 'home') { if (nav.tab) { nav.tab = false; navPop(); } } else if (!nav.tab) { nav.tab = true; navPush({ tab: true }); }
+  S.tab = tab;
+  render();
+  window.scrollTo({ top: 0 });
+}
+
 function openSheet(sheet) {
-  // A single history entry, so the phone's back button closes the sheet.
-  if (!S.sheet) history.pushState({ sheet: true }, '');
+  if (!S.sheet && !nav.sheet) { nav.sheet = true; navPush({ sheet: true }); }
   S.sheet = sheet;
   renderSheet();
 }
 function closeSheet() {
-  if (S.sheet && history.state?.sheet) history.back();
-  else { S.sheet = null; renderSheet(); render(); }
-}
-window.addEventListener('popstate', () => {
-  if (!S.sheet) return;
   S.sheet = null;
   renderSheet();
   render();
-});
+  if (nav.sheet) { nav.sheet = false; navPop(); }
+}
 
 function renderSheet() {
   document.body.classList.toggle('sheet-open', Boolean(S.sheet));
@@ -1275,7 +1341,10 @@ function saveSet() {
 function openModal(html, cls = '') {
   $modal.className = cls;
   $modal.innerHTML = `<div class="modal-body">${html}</div>`;
-  if (!$modal.open) $modal.showModal();
+  if (!$modal.open) {
+    $modal.showModal();
+    if (!nav.modal) { nav.modal = true; navPush({ modal: true }); }
+  }
   $modal.querySelector('[autofocus]')?.focus();
 }
 const closeModal = () => $modal.open && $modal.close();
@@ -1301,6 +1370,9 @@ function settingsModal() {
       <div><h3>${esc(me.name)}</h3><p class="muted">${esc(me.email)}</p></div></div>
     <div class="setting"><span class="setting-label">${t('settings.language')}</span>
       <div class="seg wide">${[['es', 'Español'], ['en', 'English']].map(([v, l]) => `<button class="${getLang() === v ? 'on' : ''}" data-action="lang" data-lang="${v}">${l}</button>`).join('')}</div></div>
+    <div class="setting"><span class="setting-label">${t('settings.accent')}</span>
+      <div class="swatches">${Object.entries(ACCENTS).map(([k, v]) => `<button class="swatch ${prefs.accent === k ? 'on' : ''}" style="--sw:${v.light[0]};--swink:${v.light[1]}"
+        data-action="pref" data-k="accent" data-v="${k}" aria-label="${t(`accent.${k}`)}" title="${t(`accent.${k}`)}">${icon('check')}</button>`).join('')}</div></div>
     <div class="setting"><span class="setting-label">${t('settings.theme')}</span>
       ${segPref('theme', [['system', t('settings.system')], ['light', t('settings.light')], ['dark', t('settings.dark')]])}</div>
     <div class="setting"><span class="setting-label">${t('settings.step')}</span>
@@ -1518,7 +1590,7 @@ function removeEntries(ids, who = target()) {
 /** One tap deletes; the toast offers Undo for a few seconds instead of asking to confirm. */
 function deleteWithUndo(ids, message) {
   const undo = removeEntries(ids);
-  toast(message, { ic: 'trash', action: t('common.undo'), onAction: undo });
+  toast(message, { ic: 'trash', action: t('common.undo'), onAction: undo, duration: 4000 });
 }
 
 const actions = {
@@ -1540,6 +1612,7 @@ const actions = {
     closeModal();
     Timer.stop();
     if (S.store?.kind === 'google') { G.signOut(); clearCache(); }
+    Object.assign(nav, { tab: false, sheet: false, modal: false });
     Object.assign(S, { store: null, me: null, groups: [], group: null, outbox: null, needsPicker: null, tab: 'home', logFor: '', sheet: null, day: St.todayISO() });
     renderSheet();
     render();
@@ -1554,12 +1627,13 @@ const actions = {
   },
   pref: (el) => {
     const k = el.dataset.k;
-    prefs[k] = k === 'theme' ? el.dataset.v : Number(el.dataset.v);
+    prefs[k] = k === 'theme' || k === 'accent' ? el.dataset.v : Number(el.dataset.v);
     savePrefs();
+    if (k === 'accent') { applyTheme(); render(); if (S.sheet) renderSheet(); }
     if (k === 'theme') { applyTheme(); render(); }
     el.parentElement.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === el));
   },
-  tab: (el) => { S.tab = el.dataset.tab; render(); window.scrollTo({ top: 0 }); },
+  tab: (el) => setTab(el.dataset.tab),
   'group-tab': (el) => { S.groupTab = el.dataset.v; render(); },
   period: (el) => { S.period = el.dataset.p; render(); },
   metric: (el) => { S.metric = el.dataset.m; render(); },
@@ -1568,7 +1642,7 @@ const actions = {
   day: (el) => { S.day = el.dataset.d; render(); },
   profile: (el) => { S.profile = el.dataset.e; render(); },
   'cal-day': (el) => calDayModal(el.dataset.d),
-  'goto-day': (el) => { closeModal(); S.day = el.dataset.d; S.tab = 'log'; render(); window.scrollTo({ top: 0 }); },
+  'goto-day': (el) => { closeModal(); S.day = el.dataset.d; setTab('log'); render(); },
   'close-modal': closeModal,
   'add-ex': () => openSheet({ kind: 'picker', q: '', cat: 'all' }),
   'open-ex': (el) => openExercise(el.dataset.name),
@@ -1599,7 +1673,7 @@ const actions = {
   },
   'new-ex': (el) => newExerciseModal(el.dataset.name || S.sheet?.q || ''),
   'ex-view': (el) => { readSteppers(); S.sheet.view = el.dataset.v; renderSheet(); },
-  'ex-chart': () => { const name = S.sheet.name; S.exercise = name; S.tab = 'progress'; closeSheet(); },
+  'ex-chart': () => { S.exercise = S.sheet.name; closeSheet(); setTab('progress'); },
   fill: (el) => {
     S.sheet.w = Number(el.dataset.w); S.sheet.r = Number(el.dataset.r);
     document.getElementById('in-w').value = showNum(S.sheet.w);
@@ -1641,8 +1715,8 @@ const actions = {
     S.tab = 'home';
     await openGroup(id);
   }),
-  'start-workout': () => { S.tab = 'log'; S.day = St.todayISO(); render(); openSheet({ kind: 'picker', q: '', cat: 'all' }); },
-  'go-log': () => { S.tab = 'log'; S.day = St.todayISO(); render(); window.scrollTo({ top: 0 }); },
+  'start-workout': () => { S.day = St.todayISO(); setTab('log'); openSheet({ kind: 'picker', q: '', cat: 'all' }); },
+  'go-log': () => { S.day = St.todayISO(); setTab('log'); },
   'toggle-info': (el) => {
     const box = document.getElementById(el.getAttribute('aria-controls'));
     if (!box) return;
@@ -1772,7 +1846,8 @@ const forms = {
     return run(async () => {
       await S.store.addChallenge(S.group.id, c);
       closeModal();
-      S.tab = 'group'; S.groupTab = 'challenges';
+      S.groupTab = 'challenges';
+      setTab('group');
       await openGroup(S.group.id);
       toast(t('ch.created'), { ic: 'flag' });
     });
@@ -1793,7 +1868,7 @@ const forms = {
       const id = await S.store.createGroup(name);
       closeModal();
       S.groups = await S.store.listGroups();
-      S.tab = 'log';
+      S.tab = 'home';
       await openGroup(id);
       toast(t('groups.created'), { action: t('group.invite'), onAction: inviteModal });
     });

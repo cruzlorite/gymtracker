@@ -12,6 +12,9 @@
   --accent-ink: #0B0B0D;
   --accent-text: #4A6800;
   --accent-soft: #EDF7CC;
+  /* Accent on always-dark surfaces (rest bar, toast), whatever the theme. */
+  --accent-on-dark: #C8F04A;
+  --accent-on-dark-ink: #0B0B0D;
   --danger: #D33A2C;
   --danger-soft: #FBE6E3;
   --warn-soft: #FFF3D1;
@@ -525,6 +528,18 @@ body:has(#restbar.show) .fab { bottom: calc(var(--nav-h) + var(--safe-b) + 92px)
 button.appbar-logo { display: inline-flex; }
 button.nav-brand { text-align: left; }
 
+/* Accent colour swatches (Settings) */
+.swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+.swatch {
+  display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border-radius: 50%; border: 3px solid var(--surface);
+  background: var(--sw); color: var(--swink); box-shadow: 0 0 0 1px var(--line); transition: box-shadow .15s, transform .08s;
+}
+.swatch .ic { width: 18px; height: 18px; stroke-width: 3; opacity: 0; }
+.swatch.on { box-shadow: 0 0 0 2px var(--text); }
+.swatch.on .ic { opacity: 1; }
+.swatch:active { transform: scale(.94); }
+@media (pointer: coarse) { .swatch { width: 44px; height: 44px; } }
+
 .btn.danger-solid { background: var(--danger); border-color: var(--danger); color: #fff; }
 .member-list { list-style: none; margin: 0 0 10px; padding: 0; display: grid; }
 .member-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); }
@@ -561,17 +576,17 @@ button.nav-brand { text-align: left; }
 }
 .restbar.show { display: block; animation: sheet-in .2s ease-out; }
 body.sheet-open .restbar, body:not(:has(.has-nav)) .restbar { bottom: calc(var(--safe-b) + 12px); }
-.restbar-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: rgb(200 240 74 / .2); transition: width .25s linear; }
+.restbar-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: color-mix(in srgb, var(--accent-on-dark) 22%, transparent); transition: width .25s linear; }
 .restbar-row { position: relative; display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 16px; }
 .restbar-label { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: #C9C9D0; }
-.restbar-label .ic { width: 18px; height: 18px; color: #C8F04A; }
+.restbar-label .ic { width: 18px; height: 18px; color: var(--accent-on-dark); }
 .restbar-time { margin-left: auto; font-size: 28px; font-weight: 750; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
 .restbar-actions { display: inline-flex; gap: 4px; }
 .chip-btn { height: 38px; padding: 0 10px; border: 0; border-radius: 11px; background: rgb(255 255 255 / .1); color: #fff; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .chip-btn:hover { background: rgb(255 255 255 / .16); }
 .restbar .icon-btn { color: #fff; }
 .restbar .icon-btn:hover { background: rgb(255 255 255 / .1); }
-.restbar.done { background: #C8F04A; border-color: #C8F04A; color: #0B0B0D; }
+.restbar.done { background: var(--accent-on-dark); border-color: var(--accent-on-dark); color: var(--accent-on-dark-ink); }
 .restbar.done .restbar-label { color: #0B0B0D; font-size: 16px; font-weight: 700; flex: 1; padding: 6px 0; }
 .restbar.done .restbar-label .ic, .restbar.done .icon-btn { color: #0B0B0D; }
 .restbar.done .icon-btn:hover { background: rgb(0 0 0 / .08); }
@@ -723,10 +738,10 @@ dialog[open] { animation: pop .18s ease-out; }
   font-weight: 600; font-size: 14.5px; box-shadow: 0 12px 32px rgb(0 0 0 / .3); transition: transform .22s, opacity .22s, visibility .22s;
 }
 #toast.show { transform: translate(-50%, 0); opacity: 1; visibility: visible; pointer-events: auto; }
-#toast .ic { color: #C8F04A; }
+#toast .ic { color: var(--accent-on-dark); }
 #toast.error { background: var(--danger); border-color: var(--danger); color: #fff; }
 #toast.error .ic { color: #fff; }
-.toast-btn { margin-left: 4px; height: 32px; padding: 0 12px; border: 0; border-radius: 9px; background: #C8F04A; color: #0B0B0D; font-weight: 700; }
+.toast-btn { margin-left: 4px; height: 32px; padding: 0 12px; border: 0; border-radius: 9px; background: var(--accent-on-dark); color: var(--accent-on-dark-ink); font-weight: 700; }
 
 /* ============ Landing ============ */
 .landing { display: flex; flex-direction: column; min-height: 100svh; max-width: 1140px; margin: 0 auto; padding: var(--safe-t) 20px 0; }
