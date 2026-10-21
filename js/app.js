@@ -592,14 +592,16 @@ function viewLog() {
   const sets = [...byEx.values()].reduce((a, l) => a + l.reduce((b, e) => b + (e.sets || 1), 0), 0);
   const vol = St.volume(es);
 
-  const nav = `<div class="daynav">
+  const forPill = logForPicker();
+  const nav = `<div class="daynav ${forPill ? 'with-for' : ''}">
     <button class="icon-btn" data-action="day" data-d="${St.addDays(day, -1)}" aria-label="${t('day.prev')}">${icon('left')}</button>
     <label class="daynav-label">
       <span class="daynav-rel">${day === today || daysAgo(day) === 1 ? relDay(day) : cap(df({ weekday: 'long' }).format(St.parseISO(day)))}</span>
-      <span class="daynav-date">${cap(df({ day: 'numeric', month: 'long', year: 'numeric' }).format(St.parseISO(day)))}</span>
+      <span class="daynav-date">${cap(df({ day: 'numeric', month: 'long', ...(day.slice(0, 4) === today.slice(0, 4) ? {} : { year: 'numeric' }) }).format(St.parseISO(day)))}</span>
       <input type="date" data-change="day" value="${day}" max="${today}" aria-label="${t('day.pick')}">
     </label>
     <button class="icon-btn" data-action="day" data-d="${St.addDays(day, 1)}" ${day >= today ? 'disabled' : ''} aria-label="${t('day.next')}">${icon('right')}</button>
+    ${forPill}
   </div>`;
 
   let body;
@@ -638,7 +640,7 @@ function viewLog() {
         <button class="icon-btn sm" data-action="del-entry" data-id="${esc(e.id)}" aria-label="${t('common.delete')}">${icon('trash')}</button></div>`).join('')}
       </div>`;
   }
-  return `${installBanner()}${logForPicker()}${nav}${body}
+  return `${installBanner()}${nav}${body}
     ${es.length ? `<button class="fab" data-action="add-ex">${icon('plus')}<span>${t('log.addExercise')}</span></button>` : ''}`;
 }
 
@@ -1159,14 +1161,18 @@ function pickRow(e) {
 function pickerList() {
   const { q: rawQ, cat } = S.sheet;
   const q = Ex.norm(rawQ || '');
-  const all = Ex.allExercises(usedNames()).filter((e) => (cat === 'all' || e.cat === cat) && Ex.matches(e, q));
+  const inCat = Ex.allExercises(usedNames()).filter((e) => cat === 'all' || e.cat === cat);
   const byName = (a, b) => Ex.exName(a.name).localeCompare(Ex.exName(b.name), locale());
   let html = '';
-  const exact = rawQ.trim() && Ex.findExisting(rawQ, usedNames());
-  if (rawQ.trim() && !exact) {
-    html += `<button class="pick-row create" data-action="new-ex" data-name="${esc(rawQ.trim())}">${icon('plus')}<span class="pick-name">${t('picker.create', { name: esc(rawQ.trim()) })}</span></button>`;
+  if (q) {
+    // Fuzzy, ranked: word order, partial words and small typos are fine ("banca press", "sentadila").
+    const found = Ex.search(inCat, rawQ, (e) => Ex.exName(e.name));
+    const create = !Ex.findExisting(rawQ, usedNames())
+      ? `<button class="pick-row create" data-action="new-ex" data-name="${esc(rawQ.trim())}">${icon('plus')}<span class="pick-name">${t('picker.create', { name: esc(rawQ.trim()) })}</span></button>`
+      : '';
+    return found.length ? found.map(pickRow).join('') + create : create + `<p class="muted pad">${t('picker.noResults')}</p>`;
   }
-  if (q) return html + (all.length ? all.sort(byName).map(pickRow).join('') : `<p class="muted pad">${t('picker.noResults')}</p>`);
+  const all = inCat;
   if (cat === 'all') {
     // Recent first: what you repeat most at the gym is one tap away.
     const last = new Map();

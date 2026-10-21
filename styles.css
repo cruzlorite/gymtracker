@@ -520,7 +520,13 @@ body:has(#restbar.show) .fab { bottom: calc(var(--nav-h) + var(--safe-b) + 92px)
 .for-who { color: var(--accent-text); }
 
 /* "Logging for" pill */
-.for-row { display: flex; justify-content: flex-end; align-items: center; gap: 2px; margin: -4px 0 4px; }
+/* Day row with the "logging for" pill: ‹ date › on the left, the pill on the right. */
+.daynav.with-for { justify-content: flex-start; gap: 2px; }
+.daynav.with-for .daynav-label { justify-items: start; padding: 2px 6px; }
+.daynav.with-for .daynav-rel { font-size: 20px; }
+.daynav-date, .daynav-rel { white-space: nowrap; }
+.for-row { display: flex; align-items: center; gap: 2px; margin-left: auto; min-width: 0; }
+.for-pill span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 9em; }
 .for-pill {
   display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 8px 0 3px; border-radius: 999px;
   border: 1px solid var(--line); background: var(--surface); font-size: 13.5px; font-weight: 600;
@@ -743,6 +749,9 @@ dialog[open] { animation: pop .18s ease-out; }
   border: 1px solid var(--line); background: var(--surface); border-radius: 14px; font-weight: 600;
 }
 .menu-item > span:first-child { flex: 1; }
+/* An avatar at the start of a row keeps its size (the rule above would stretch it). */
+.menu-item > span.av { flex: none; }
+.menu-item > span.av + span { flex: 1; }
 .menu-item .muted { font-weight: 500; font-size: 13.5px; }
 .menu-item.on { border-color: var(--text); }
 .menu-item:hover { background: var(--surface-2); }

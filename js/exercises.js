@@ -8,20 +8,20 @@
 import { getLang } from './i18n.js';
 
 export const CATEGORIES = [
-  { id: 'chest', en: 'Chest', es: 'Pecho', color: '#EB5757' },
-  { id: 'back', en: 'Back', es: 'Espalda', color: '#5B8DEF' },
-  { id: 'shoulders', en: 'Shoulders', es: 'Hombros', color: '#F2994A' },
-  { id: 'biceps', en: 'Biceps', es: 'Bíceps', color: '#9B51E0' },
-  { id: 'triceps', en: 'Triceps', es: 'Tríceps', color: '#D46BD9' },
-  { id: 'forearms', en: 'Forearms', es: 'Antebrazo', color: '#8C7AE6' },
-  { id: 'quads', en: 'Quads', es: 'Cuádriceps', color: '#27AE60' },
-  { id: 'hamstrings', en: 'Hamstrings', es: 'Isquios', color: '#1A9C8C' },
-  { id: 'glutes', en: 'Glutes', es: 'Glúteos', color: '#E056A0' },
-  { id: 'calves', en: 'Calves', es: 'Gemelos', color: '#7BC96F' },
-  { id: 'core', en: 'Core', es: 'Core', color: '#2DCCD3' },
-  { id: 'fullbody', en: 'Full body', es: 'Cuerpo completo', color: '#F2C94C' },
-  { id: 'cardio', en: 'Cardio', es: 'Cardio', color: '#F28B82' },
-  { id: 'other', en: 'Other', es: 'Otros', color: '#8A8A93' },
+  { id: 'chest', words: 'pectoral, pectorales', en: 'Chest', es: 'Pecho', color: '#EB5757' },
+  { id: 'back', words: 'dorsal, dorsales, espalda', en: 'Back', es: 'Espalda', color: '#5B8DEF' },
+  { id: 'shoulders', words: 'deltoides, hombro', en: 'Shoulders', es: 'Hombros', color: '#F2994A' },
+  { id: 'biceps', words: 'biceps, brazo, brazos', en: 'Biceps', es: 'Bíceps', color: '#9B51E0' },
+  { id: 'triceps', words: 'triceps, brazo, brazos', en: 'Triceps', es: 'Tríceps', color: '#D46BD9' },
+  { id: 'forearms', words: 'antebrazos, agarre, grip', en: 'Forearms', es: 'Antebrazo', color: '#8C7AE6' },
+  { id: 'quads', words: 'pierna, piernas, cuadriceps, legs', en: 'Quads', es: 'Cuádriceps', color: '#27AE60' },
+  { id: 'hamstrings', words: 'femoral, femorales, isquiotibiales, pierna, piernas, legs', en: 'Hamstrings', es: 'Isquios', color: '#1A9C8C' },
+  { id: 'glutes', words: 'gluteo, gluteos, culo, pierna', en: 'Glutes', es: 'Glúteos', color: '#E056A0' },
+  { id: 'calves', words: 'gemelo, pantorrilla, pantorrillas, soleo', en: 'Calves', es: 'Gemelos', color: '#7BC96F' },
+  { id: 'core', words: 'abdominales, abs, abdomen, oblicuos, six pack', en: 'Core', es: 'Core', color: '#2DCCD3' },
+  { id: 'fullbody', words: 'halterofilia, crossfit, olimpico, funcional', en: 'Full body', es: 'Cuerpo completo', color: '#F2C94C' },
+  { id: 'cardio', words: '', en: 'Cardio', es: 'Cardio', color: '#F28B82' },
+  { id: 'other', words: '', en: 'Other', es: 'Otros', color: '#8A8A93' },
 ];
 // Categories from the first version of the library, still found in older custom exercises.
 const LEGACY_CATEGORY = { legs: 'quads', arms: 'biceps' };
@@ -406,7 +406,102 @@ export function allExercises(usedNames = []) {
 }
 
 /** Does it match the search in either language, or one of its aliases? `q` must already be normalized. */
-export const matches = (e, q) => !q || norm(e.name).includes(q) || (e.es && norm(e.es).includes(q)) || e.tags.some((t) => t.includes(q));
+export const matches = (e, q) => !q || score(e, q) > 0;
+
+// ---------- fuzzy search ----------
+// Word order doesn't matter, words can be partial and small typos are forgiven: "banca press",
+// "jal pech" and "sentadila" all find what you meant. Query words may match the exercise's names, its
+// aliases or its muscle group ("curl biceps"). Results are ranked: names beat aliases, which beat the
+// muscle group, and exercises whose own name is closest to the query come first.
+
+const STOPWORDS = new Set(['de', 'del', 'con', 'en', 'a', 'al', 'la', 'el', 'los', 'las', 'y', 'with', 'the', 'and', 'of', 'on']);
+const words = (s) => s.split(/[^a-z0-9]+/).filter((w) => w && !STOPWORDS.has(w));
+
+/** Optimal string alignment distance (Levenshtein + adjacent swaps), stopping early past `max`. */
+function distance(a, b, max) {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev2 = null;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    let rowMin = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      let v = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+      if (prev2 && i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) v = Math.min(v, prev2[j - 2] + 1);
+      cur.push(v);
+      rowMin = Math.min(rowMin, v);
+    }
+    if (rowMin > max) return max + 1;
+    prev2 = prev;
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+/** Typos allowed for a query word: none for short words, then 1, then 2. */
+const allowed = (w) => (w.length <= 3 ? 0 : w.length <= 6 ? 1 : 2);
+
+/** How well one query word matches one word of the exercise: 1 exact … 0 no match. */
+function wordScore(q, w) {
+  if (w === q) return 1;
+  if (w.startsWith(q)) return 0.9;
+  if (q.length >= 3 && w.includes(q)) return 0.7;
+  const max = allowed(q);
+  if (!max) return 0;
+  // Compare against the whole word and against its start, so a misspelt partial word still counts.
+  const d = Math.min(distance(q, w, max), w.length > q.length ? distance(q, w.slice(0, q.length), max) : max + 1);
+  return d <= max ? 0.6 - 0.1 * d : 0;
+}
+
+const NAME = 1, ALIAS = 0.85, GROUP = 0.6; // how much a match counts depending on where it is
+
+/** Match quality of an exercise for a normalized query (0 = no match). */
+export function score(e, q) {
+  if (!q) return 1;
+  const names = [e.name, e.es].filter(Boolean).map(norm);
+  const aliases = e.tags || [];
+  let best = 0;
+  // Whole-text matches: exact, starts with, contains (shorter names rank higher).
+  for (const [list, weight] of [[names, NAME], [aliases, ALIAS]]) {
+    for (const f of list) {
+      const extra = Math.min(20, f.length - q.length);
+      if (f === q) best = Math.max(best, 100 * weight);
+      else if (f.startsWith(q)) best = Math.max(best, (92 - extra * 0.4) * weight);
+      else if (f.includes(q)) best = Math.max(best, (82 - extra * 0.4) * weight);
+    }
+  }
+  // Word by word, across names, aliases and muscle group.
+  const qWords = words(q);
+  if (!qWords.length) return best;
+  const group = CATEGORIES.find((c) => c.id === e.cat);
+  const bag = [
+    ...names.flatMap((f) => words(f).map((w) => [w, NAME])),
+    ...aliases.flatMap((f) => words(f).map((w) => [w, ALIAS])),
+    ...(group ? [group.en, group.es, group.words || ''].flatMap((f) => words(norm(f)).map((w) => [w, GROUP])) : []),
+  ];
+  let total = 0;
+  for (const qw of qWords) {
+    let s = 0;
+    for (const [w, weight] of bag) s = Math.max(s, wordScore(qw, w) * weight);
+    if (!s) return best; // every query word must match something
+    total += s;
+  }
+  // Bonus when the query covers most of the exercise's own name: "sentadila" → Sentadilla first.
+  const coverage = Math.max(...names.map((f) => {
+    const ws = words(f);
+    return ws.length ? ws.filter((w) => qWords.some((qw) => wordScore(qw, w) > 0)).length / ws.length : 0;
+  }));
+  return Math.max(best, 40 + 30 * (total / qWords.length) + 12 * coverage);
+}
+
+/** Exercises matching the query, best first (ties by the given name order). */
+export function search(list, rawQuery, nameOf = (e) => e.name) {
+  const q = norm(rawQuery);
+  return list.map((e) => ({ e, s: score(e, q) })).filter((x) => x.s > 0)
+    .sort((a, b) => b.s - a.s || nameOf(a.e).localeCompare(nameOf(b.e)))
+    .map((x) => x.e);
+}
 
 /** Is there already an exercise with this name (in either language)? Returns its stored name. */
 export function findExisting(name, usedNames = []) {
