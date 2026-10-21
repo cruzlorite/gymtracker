@@ -56,7 +56,11 @@ function cached(kind, opts, make) {
 }
 const df = (opts) => cached('d', opts, () => new Intl.DateTimeFormat(locale(), opts));
 const fmtN = (n, d = 0) => cached('n', d, () => new Intl.NumberFormat(locale(), { maximumFractionDigits: d })).format(n);
-const fmtW = (w) => (w > 0 ? `${fmtN(w, 2)} kg` : t('unit.bw'));
+// Positive: load. 0: bodyweight. Negative: machine help on an assisted exercise (shown as −20 kg).
+const fmtW = (w) => (w > 0 ? `${fmtN(w, 2)} kg` : w < 0 ? `−${fmtN(-w, 2)} kg` : t('unit.bw'));
+const isAssisted = (name) => Boolean(Ex.exerciseInfo(name).assisted);
+/** The weight field shows the help as a positive number on assisted exercises. */
+const shownW = (name, w) => (isAssisted(name) && typeof w === 'number' ? Math.abs(w) : w);
 const fmtKg = (n) => (n >= 10000 ? `${fmtN(n / 1000, 1)} t` : `${fmtN(n)} kg`);
 const fmtPct = (p) => `${p > 0 ? '+' : ''}${fmtN(p * 100, 1)} %`;
 const fmtDate = (iso) => df({ day: 'numeric', month: 'short' }).format(St.parseISO(iso));
@@ -453,14 +457,24 @@ function suspiciousNote() {
 }
 
 /** "Logging for" chips on the Workout tab, when you may log sets for other members. */
+/** "Logging for" as a small pill; tapping it lists the members. Highlighted while logging for someone else. */
 function logForPicker() {
   if (!canLogForOthers()) return '';
+  const who = member(target());
+  const other = who.email !== S.me.email;
+  return `<div class="for-row">
+      <button class="for-pill ${other ? 'other' : ''}" data-action="log-for-menu" aria-label="${t('log.for')}">${avatar(who)}
+        <span>${t('log.forShort', { name: esc(other ? who.name.split(' ')[0] : t('common.you')) })}</span>${icon('down')}</button>
+      ${other ? `<button class="icon-btn sm" data-action="log-for" data-e="${esc(S.me.email)}" aria-label="${t('log.forBack')}">${icon('x')}</button>` : ''}
+    </div>`;
+}
+
+function logForMenu() {
   const who = target();
-  return `<div class="log-for">
-      <span class="log-for-label">${t('log.for')}</span>
-      <div class="people compact">${[...members()].sort((a, b) => (a.email === S.me.email ? -1 : b.email === S.me.email ? 1 : 0)).map((m) => `<button class="person ${m.email === who ? 'on' : ''}" data-action="log-for" data-e="${esc(m.email)}">${avatar(m)}<span>${esc(m.email === S.me.email ? t('common.you') : m.name.split(' ')[0])}</span></button>`).join('')}</div>
-    </div>
-    ${who !== S.me.email ? `<p class="notice for-notice">${icon('edit')}<span>${t('log.forNotice', { name: `<strong>${esc(member(who)?.name || '')}</strong>` })}</span></p>` : ''}`;
+  const list = [...members()].sort((a, b) => (a.email === S.me.email ? -1 : b.email === S.me.email ? 1 : 0));
+  openModal(`${modalHead(t('log.for'))}
+    <ul class="menu">${list.map((m) => `<li><button class="menu-item ${m.email === who ? 'on' : ''}" data-action="log-for" data-e="${esc(m.email)}">
+      ${avatar(m)}<span>${esc(m.email === S.me.email && m.name !== t('common.you') ? `${m.name} (${t('common.you')})` : m.name)}</span>${m.email === who ? icon('check') : ''}</button></li>`).join('')}</ul>`);
 }
 
 // ---------- Home ----------
@@ -505,9 +519,9 @@ function viewHome() {
     </div>
     <section class="card today-card ${todays.length ? 'done' : ''}">
       ${todays.length
-        ? `<div><p class="eyebrow">${t('home.today')}</p><h2>${fmtN(todayEx)} ${t('log.exercises', { n: todayEx })} · ${t('log.sets', { n: todaySets })}</h2></div>
+        ? `<div><h2>${t('home.todayDone', { summary: `${fmtN(todayEx)} ${t('log.exercises', { n: todayEx })} · ${t('log.sets', { n: todaySets })}` })}</h2></div>
            <button class="btn primary lg" data-action="go-log">${icon('dumbbell')} ${t('home.continue')}</button>`
-        : `<div><p class="eyebrow">${t('home.today')}</p><h2>${t('home.todayEmpty')}</h2><p class="muted">${t('home.todayEmptyText')}</p></div>
+        : `<div><h2>${t('home.todayEmpty')}</h2><p class="muted">${t('home.todayEmptyText')}</p></div>
            <button class="btn primary lg" data-action="start-workout">${icon('plus')} ${t('home.start')}</button>`}
     </section>
     <div class="home-tiles">
@@ -686,9 +700,11 @@ function exerciseOptions(entries) {
   for (const e of entries) if (e.exercise) freq.set(e.exercise, (freq.get(e.exercise) || 0) + 1);
   return [...freq].sort((a, b) => b[1] - a[1]).map(([ex]) => ex);
 }
-const hasWeight = (name) => S.group.entries.some((e) => e.exercise === name && e.weight > 0);
+const hasWeight = (name) => S.group.entries.some((e) => e.exercise === name && e.weight !== 0);
+/** Metrics that make sense: bodyweight → reps only; assisted → help (max weight) and reps; else all. */
+const metricsFor = (name) => (!hasWeight(name) ? ['reps'] : isAssisted(name) ? ['weight', 'reps'] : St.METRICS);
 /** Bodyweight-only exercises can only be charted by reps. */
-const metricFor = (name) => (hasWeight(name) ? S.metric : 'reps');
+const metricFor = (name) => (metricsFor(name).includes(S.metric) ? S.metric : metricsFor(name)[0]);
 const fmtMetric = (metric, v, d = 1) => (metric === 'reps' ? t('unit.reps', { n: fmtN(v) }) : metric === 'volume' ? fmtKg(v) : `${fmtN(v, d)} kg`);
 
 function periodChips() {
@@ -697,9 +713,9 @@ function periodChips() {
 }
 
 function metricChips(name, current = metricFor(name), action = 'metric') {
-  const weighted = hasWeight(name);
+  const ok = metricsFor(name);
   return `<div class="seg" role="group" aria-label="${t('metric.label')}">${St.METRICS.map((k) =>
-    `<button class="${current === k ? 'on' : ''}" data-action="${action}" data-m="${k}" ${!weighted && k !== 'reps' ? 'disabled' : ''}>${t(`metric.${k}`)}</button>`).join('')}</div>`;
+    `<button class="${current === k ? 'on' : ''}" data-action="${action}" data-m="${k}" ${ok.includes(k) ? '' : 'disabled'}>${t(isAssisted(name) && k === 'weight' ? 'metric.assist' : `metric.${k}`)}</button>`).join('')}</div>`;
 }
 
 /** All-time bests for one exercise (mine by default). Shared by Progress and the exercise sheet. */
@@ -709,6 +725,13 @@ function recordsBlock(name, entries = mine()) {
   const tile = (label, value, date, detail = '') =>
     `<div class="tile"><span>${label}</span><strong>${value}</strong>${date ? `<em>${detail ? `${detail} · ` : ''}${fmtDate(date)}</em>` : ''}</div>`;
   const set = (e) => `${fmtW(e.weight)} × ${fmtN(e.reps)}`;
+  if (isAssisted(name) && sum.weight.value < 0) {
+    return `<div class="tiles">
+      ${tile(t('records.leastAssist'), fmtW(sum.weight.value), sum.weight.date, `× ${fmtN(sum.weight.set.reps)}`)}
+      ${tile(t('metric.reps'), fmtN(sum.reps.value), sum.reps.date)}
+      ${tile(t('ex.sessions'), fmtN(sum.sessions))}
+    </div>`;
+  }
   if (!(sum.weight.value > 0)) {
     return `<div class="tiles">
       ${tile(t('metric.reps'), fmtN(sum.reps.value), sum.reps.date)}
@@ -784,7 +807,7 @@ function mountChart() {
   const who = compare ? members() : members().filter((m) => m.email === S.me.email);
   const datasets = who.map((m) => {
     const data = St.dailySeries(entriesOf(m.email).filter((e) => e.date >= r.from && e.date <= r.to), S.exercise, metric)
-      .filter((p) => p.value > 0)
+      .filter((p) => p.value !== 0)
       .map((p) => ({ x: +St.parseISO(p.date), y: Math.round(p.value * 10) / 10 }));
     const me = m.email === S.me.email;
     const color = me && !compare ? accent : m.color;
@@ -841,7 +864,7 @@ function mountSheetChart() {
   const name = S.sheet.name;
   const metric = sheetMetric(name);
   const color = getComputedStyle(document.documentElement).getPropertyValue('--accent-text').trim();
-  const data = St.dailySeries(targetEntries(), name, metric).filter((p) => p.value > 0)
+  const data = St.dailySeries(targetEntries(), name, metric).filter((p) => p.value !== 0)
     .map((p) => ({ x: +St.parseISO(p.date), y: Math.round(p.value * 10) / 10 }));
   S.sheetChart = drawChart(canvas, [{
     label: member(target())?.name || S.me.name, data, borderColor: color, backgroundColor: color, tension: 0.3, pointRadius: 3, pointHoverRadius: 5, borderWidth: 3,
@@ -1163,9 +1186,9 @@ function pickerList() {
 function defaultsFor(name) {
   const es = targetEntries();
   const today = es.filter((e) => e.exercise === name && e.date === S.day);
-  if (today.length) { const e = today[today.length - 1]; return { w: e.weight, r: e.reps }; }
+  if (today.length) { const e = today[today.length - 1]; return { w: shownW(name, e.weight), r: e.reps }; }
   const last = St.lastSession(es, name, S.day);
-  if (last) return { w: last.sets[0].weight, r: last.sets[0].reps };
+  if (last) return { w: shownW(name, last.sets[0].weight), r: last.sets[0].reps };
   return { w: Ex.exerciseInfo(name).bw ? 0 : '', r: '' };
 }
 
@@ -1183,6 +1206,8 @@ function exerciseSheet() {
       <button class="icon-btn" data-action="close-sheet" aria-label="${t('common.back')}">${icon('left')}</button>
       <div class="sheet-title"><h2>${esc(Ex.exName(name))}</h2>
         <span class="muted"><span class="cat-dot" style="--c:${cat.color}"></span>${esc(Ex.catLabel(cat))} · ${S.day === today ? t('day.today') : fmtLong(S.day)}${target() !== S.me.email ? ` · <strong class="for-who">${esc(member(target())?.name || '')}</strong>` : ''}</span></div>
+      <a class="icon-btn" href="https://www.youtube.com/results?search_query=${encodeURIComponent(`${Ex.exName(name)} ${t('ex.howToQuery')}`)}"
+        target="_blank" rel="noopener" aria-label="${t('ex.howTo')}" title="${t('ex.howTo')}">${icon('play')}</a>
       <button class="icon-btn" data-action="timer-settings" aria-label="${t('timer.title')}">${icon('timer')}</button>
     </header>
     <div class="seg wide">${['log', 'history', 'records'].map((v) =>
@@ -1214,7 +1239,7 @@ function exerciseLogView(name) {
   return `<section class="entry-card ${editing ? 'editing' : ''}">
       ${editing ? `<p class="editing-label">${icon('edit')} ${t('ex.editing', { n: todays.findIndex((e) => e.id === sh.edit) + 1 })}</p>` : ''}
       <div class="steppers">
-        ${stepper('w', t('ex.weight'), sh.w, 'kg')}
+        ${stepper('w', isAssisted(name) ? t('ex.assist') : t('ex.weight'), sh.w, 'kg')}
         ${stepper('r', t('ex.reps'), sh.r, '')}
       </div>
       ${editing
@@ -1225,6 +1250,7 @@ function exerciseLogView(name) {
           </div>`
         : `<button class="btn primary xl block" data-action="save-set">${icon('check')} ${t('ex.save')}</button>`}
       ${Ex.exerciseInfo(name).bw ? `<p class="fine center">${t('ex.bwHint')}</p>` : ''}
+      ${isAssisted(name) ? `<p class="fine center">${t('ex.assistHint')}</p>` : ''}
     </section>
     ${last ? `<section class="last">
       <h3>${t('ex.lastTime', { day: relDay(last.date) })}</h3>
@@ -1299,7 +1325,8 @@ function saveSet() {
   readSteppers();
   const sh = S.sheet;
   const reps = Math.round(numIn(sh.r));
-  const weight = Math.max(0, numIn(sh.w));
+  // Assisted: the field holds the help; it's stored negative so less help ranks as a better set.
+  const weight = isAssisted(sh.name) ? -Math.abs(numIn(sh.w)) : Math.max(0, numIn(sh.w));
   if (!reps || reps < 1) { toast(t('ex.needReps'), { error: true }); document.getElementById('in-r')?.focus(); return; }
   const gid = S.group.id;
   const who = target();
@@ -1456,14 +1483,23 @@ function inviteModal() {
   const link = `${location.origin}${location.pathname}?group=${encodeURIComponent(S.group.id)}`;
   const demo = S.store.kind === 'demo';
   const owner = S.group.ownerName || t('group.creator');
+  const message = t('invite.message', { group: S.group.name, link });
   openModal(`${modalHead(t('invite.title'))}
     ${S.group.canShare ? `<p>${t('invite.text')}</p>
     <form data-form="invite" class="inline-form">
       <input type="email" name="email" required placeholder="email@gmail.com" aria-label="${t('invite.emailLabel')}" autofocus>
       <button class="btn primary">${t('invite.send')}</button>
     </form>` : `<p>${t('invite.onlyOwner', { owner: `<strong>${esc(owner)}</strong>` })}</p>`}
-    <label class="field"><span>${t('invite.link')}</span>
-      <div class="inline-form"><input readonly value="${esc(link)}" id="invite-link"><button class="btn ghost" type="button" data-action="copy-link">${icon('link')} ${t('common.copy')}</button></div></label>
+    <section class="share">
+      <h3 class="list-head">${t('invite.sendLink')}</h3>
+      <div class="share-grid">
+        <a class="btn ghost" href="https://wa.me/?text=${encodeURIComponent(message)}" target="_blank" rel="noopener">${icon('chat')} WhatsApp</a>
+        <a class="btn ghost" href="mailto:?subject=${encodeURIComponent(t('invite.subject', { group: S.group.name }))}&body=${encodeURIComponent(message)}">${icon('mail')} Email</a>
+        ${navigator.share ? `<button class="btn ghost" type="button" data-action="share-link">${icon('share')} ${t('invite.more')}</button>` : ''}
+        <button class="btn ghost" type="button" data-action="copy-link">${icon('link')} ${t('common.copy')}</button>
+      </div>
+      <input type="hidden" value="${esc(link)}" id="invite-link">
+    </section>
     <p class="fine">${t('invite.linkNote')}${demo ? ` ${t('invite.demoNote')}` : ''}</p>`);
 }
 
@@ -1678,7 +1714,7 @@ const actions = {
   'ex-view': (el) => { readSteppers(); S.sheet.view = el.dataset.v; renderSheet(); },
   'ex-chart': () => { S.exercise = S.sheet.name; closeSheet(); setTab('progress'); },
   fill: (el) => {
-    S.sheet.w = Number(el.dataset.w); S.sheet.r = Number(el.dataset.r);
+    S.sheet.w = shownW(S.sheet.name, Number(el.dataset.w)); S.sheet.r = Number(el.dataset.r);
     document.getElementById('in-w').value = showNum(S.sheet.w);
     document.getElementById('in-r').value = showNum(S.sheet.r);
   },
@@ -1687,7 +1723,7 @@ const actions = {
     readSteppers();
     const e = targetEntries().find((x) => x.id === el.dataset.id);
     if (!e) return;
-    if (S.sheet.edit === e.id) { S.sheet.edit = null; } else { Object.assign(S.sheet, { edit: e.id, w: e.weight, r: e.reps }); }
+    if (S.sheet.edit === e.id) { S.sheet.edit = null; } else { Object.assign(S.sheet, { edit: e.id, w: shownW(e.exercise, e.weight), r: e.reps }); }
     renderSheet();
     // The steppers are at the top: bring them into view so the edit doesn't happen off-screen.
     if (S.sheet.edit) $sheet.querySelector('.sheet-panel')?.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1713,7 +1749,8 @@ const actions = {
   reconnect: () => reconnect(),
   'sync-error': () => syncErrorModal(),
   'group-settings': () => openGroupSettings(),
-  'log-for': (el) => { S.logFor = el.dataset.e === S.me.email ? '' : el.dataset.e; render(); },
+  'log-for': (el) => { closeModal(); S.logFor = el.dataset.e === S.me.email ? '' : el.dataset.e; render(); },
+  'log-for-menu': () => logForMenu(),
   'create-solo': () => run(async () => {
     const id = await S.store.createGroup(t('groups.soloName'));
     S.groups = await S.store.listGroups();
@@ -1768,6 +1805,10 @@ const actions = {
     S.outbox.discard();
     closeModal();
     run(() => openGroup(S.group.id));
+  },
+  'share-link': () => {
+    const link = document.getElementById('invite-link').value;
+    navigator.share?.({ title: 'GymTracker', text: t('invite.message', { group: S.group.name, link: '' }).trim(), url: link }).catch(() => {});
   },
   'copy-link': () => {
     const v = document.getElementById('invite-link').value;

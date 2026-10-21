@@ -29,10 +29,15 @@ export function periodRange(p) {
 }
 const inRange = (e, r) => !r || (e.date >= r.from && e.date <= r.to);
 
-/** Estimated 1RM (Epley). */
+/**
+ * Estimated 1RM (Epley). Assisted exercises log the machine's help as negative weight: there the score
+ * is inverted, so less help or more reps with the same help both rank higher (it stays negative, which
+ * keeps them out of the % improvement maths).
+ */
 export function e1rm(weight, reps) {
   const w = +weight || 0, r = +reps || 0;
   if (!w || !r) return 0;
+  if (w < 0) return w / (1 + r / 30);
   return r === 1 ? w : w * (1 + r / 30);
 }
 
@@ -44,7 +49,7 @@ export const attendance = (entries, r) => sessionDates(entries, r).length;
 export function volume(entries, r, exercise) {
   return entries
     .filter(e => inRange(e, r) && (!exercise || e.exercise === exercise))
-    .reduce((s, e) => s + (+e.sets || 0) * (+e.reps || 0) * (+e.weight || 0), 0);
+    .reduce((s, e) => s + (+e.sets || 0) * (+e.reps || 0) * Math.max(0, +e.weight || 0), 0); // help (negative) moves no kilos
 }
 
 /** Consecutive weeks (up to today) with at least one gym day. The current week doesn't break the streak. */
@@ -170,7 +175,7 @@ export function exerciseHistory(entries, exercise) {
 // ---------- per-exercise metrics (progress charts and records) ----------
 
 export const METRICS = ['e1rm', 'weight', 'volume', 'reps'];
-const setVolume = (e) => (+e.sets || 1) * (+e.reps || 0) * (+e.weight || 0);
+const setVolume = (e) => (+e.sets || 1) * (+e.reps || 0) * Math.max(0, +e.weight || 0);
 
 /**
  * One value per day for an exercise, oldest first:
@@ -180,11 +185,11 @@ export function dailySeries(entries, exercise, metric) {
   const m = new Map();
   for (const e of entries) {
     if (e.exercise !== exercise) continue;
-    const cur = m.get(e.date) || 0;
-    if (metric === 'volume') m.set(e.date, cur + setVolume(e));
+    if (metric === 'volume') m.set(e.date, (m.get(e.date) || 0) + setVolume(e));
     else {
       const v = metric === 'weight' ? +e.weight || 0 : metric === 'reps' ? +e.reps || 0 : e1rm(e.weight, e.reps);
-      m.set(e.date, Math.max(cur, v));
+      // No 0 floor: assisted sets are negative and the best of the day is the closest to zero.
+      m.set(e.date, m.has(e.date) ? Math.max(m.get(e.date), v) : v);
     }
   }
   return [...m].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([date, value]) => ({ date, value }));

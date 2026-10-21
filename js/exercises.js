@@ -28,8 +28,9 @@ const LEGACY_CATEGORY = { legs: 'quads', arms: 'biceps' };
 export const catLabel = (c) => c[getLang()] || c.en;
 
 const BW = 1; // bodyweight: 0 kg means no added weight
+const ASSIST = 2; // machine-assisted: weight is the help, stored negative (−20 kg = 20 kg of help)
 
-// [English (stored id), Spanish, aliases, bodyweight]
+// [English (stored id), Spanish, aliases, BW | ASSIST]
 const LIBRARY = {
   chest: [
     ['Bench press', 'Press banca', 'press de banca, press plano, bench'],
@@ -53,6 +54,7 @@ const LIBRARY = {
     ['Svend press', 'Svend press'],
     ['Dips', 'Fondos', 'fondos en paralelas', BW],
     ['Weighted dips', 'Fondos lastrados', 'fondos con lastre', BW],
+    ['Assisted dips', 'Fondos asistidos', 'máquina de fondos, asistida, gravitron', ASSIST],
     ['Push-ups', 'Flexiones', 'push ups, lagartijas', BW],
     ['Incline push-ups', 'Flexiones inclinadas', '', BW],
     ['Decline push-ups', 'Flexiones declinadas', '', BW],
@@ -60,7 +62,7 @@ const LIBRARY = {
     ['Paused bench press', 'Press banca con pausa'],
     ['Spoto press', 'Spoto press'],
     ['Larsen press', 'Larsen press'],
-    ['Dumbbell squeeze press', 'Press squeeze con mancuernas', 'press hex'],
+    ['Dumbbell squeeze press', 'Squeeze press con mancuernas', 'press squeeze con mancuernas, press hex'],
     ['Decline machine press', 'Press declinado en máquina'],
     ['Hammer Strength chest press', 'Press de pecho Hammer', 'hammer'],
     ['Seated cable chest press', 'Press de pecho en polea'],
@@ -80,6 +82,9 @@ const LIBRARY = {
     ['Weighted pull-ups', 'Dominadas lastradas', 'dominadas con lastre', BW],
     ['Chin-ups', 'Dominadas supinas', 'chin ups', BW],
     ['Neutral-grip pull-ups', 'Dominadas agarre neutro', '', BW],
+    ['Assisted pull-ups', 'Dominadas asistidas', 'máquina de dominadas, asistida, gravitron', ASSIST],
+    ['Assisted chin-ups', 'Dominadas supinas asistidas', 'asistida, gravitron', ASSIST],
+    ['Band-assisted pull-ups', 'Dominadas con banda', 'banda elástica, asistida', BW],
     ['Lat pulldown', 'Jalón al pecho', 'polea al pecho, dorsal, jalón'],
     ['Close-grip lat pulldown', 'Jalón agarre estrecho', 'jalón triángulo'],
     ['Reverse-grip lat pulldown', 'Jalón supino', 'jalón agarre supino'],
@@ -100,8 +105,8 @@ const LIBRARY = {
     ['Machine row', 'Remo en máquina'],
     ['Inverted row', 'Remo invertido', 'remo australiano', BW],
     ['Back extensions', 'Hiperextensiones', 'lumbares, extensiones lumbares', BW],
-    ['Shrugs', 'Encogimientos con barra', 'trapecio, encogimientos de hombros'],
-    ['Dumbbell shrugs', 'Encogimientos con mancuernas', 'trapecio'],
+    ['Shrugs', 'Shrugs con barra', 'encogimientos con barra, trapecio, encogimientos de hombros'],
+    ['Dumbbell shrugs', 'Shrugs con mancuernas', 'encogimientos con mancuernas, trapecio'],
     ['Snatch-grip deadlift', 'Peso muerto agarre de arrancada'],
     ['Wide-grip pull-ups', 'Dominadas agarre ancho', '', BW],
     ['Muscle-ups', 'Muscle-ups', '', BW],
@@ -115,7 +120,7 @@ const LIBRARY = {
     ['High row machine', 'Remo alto en máquina'],
     ['Iso-lateral row', 'Remo Hammer', 'remo iso lateral, hammer'],
     ['Smith machine row', 'Remo en multipower', 'smith'],
-    ['Smith machine shrugs', 'Encogimientos en multipower', 'trapecio, smith'],
+    ['Smith machine shrugs', 'Shrugs en multipower', 'encogimientos en multipower, trapecio, smith'],
     ['Machine back extension', 'Extensión lumbar en máquina', 'lumbares'],
     ['Superman', 'Superman', 'lumbares', BW],
     ['Jefferson curl', 'Jefferson curl'],
@@ -135,12 +140,12 @@ const LIBRARY = {
     ['Machine lateral raise', 'Elevaciones laterales en máquina'],
     ['Front raise', 'Elevaciones frontales', 'frontales'],
     ['Rear delt fly', 'Pájaros', 'pájaros con mancuernas, deltoides posterior, reverse fly'],
-    ['Reverse pec deck', 'Contractora inversa', 'pec deck inverso, deltoides posterior'],
+    ['Reverse pec deck', 'Pec deck inverso', 'contractora inversa, pec deck inverso, deltoides posterior'],
     ['Cable rear delt fly', 'Pájaros en polea', 'cruce inverso'],
     ['Face pull', 'Face pull', 'jalón a la cara'],
     ['Upright row', 'Remo al mentón', 'remo al cuello'],
-    ['Y-raise', 'Elevaciones en Y'],
-    ['Cuban press', 'Press cubano'],
+    ['Y-raise', 'Y-raise', 'elevaciones en y'],
+    ['Cuban press', 'Cuban press', 'press cubano'],
     ['Pike push-ups', 'Flexiones pike', '', BW],
     ['Handstand push-ups', 'Flexiones en pino', 'hspu', BW],
     ['Z press', 'Z press', 'press sentado en el suelo'],
@@ -150,7 +155,7 @@ const LIBRARY = {
     ['Plate front raise', 'Elevación frontal con disco', 'disco'],
     ['Cable upright row', 'Remo al mentón en polea'],
     ['External rotation', 'Rotación externa', 'manguito rotador, rotadores'],
-    ['Band pull-apart', 'Aperturas con banda', 'banda elástica', BW],
+    ['Band pull-apart', 'Band pull-apart', 'aperturas con banda, banda elástica', BW],
   ],
   biceps: [
     ['Barbell curl', 'Curl con barra', 'curl bíceps, curl de pie'],
@@ -197,9 +202,9 @@ const LIBRARY = {
     ['Wrist curl', 'Curl de muñeca', 'antebrazo'],
     ['Reverse wrist curl', 'Curl de muñeca invertido'],
     ['Reverse curl', 'Curl invertido', 'curl prono'],
-    ['Wrist roller', 'Rodillo de muñeca'],
+    ['Wrist roller', 'Wrist roller', 'rodillo de muñeca'],
     ['Behind-the-back wrist curl', 'Curl de muñeca tras la espalda'],
-    ['Hand gripper', 'Pinza de mano', 'grip, agarre', BW],
+    ['Hand gripper', 'Hand gripper', 'pinza de mano, grip, agarre', BW],
   ],
   quads: [
     ['Squat', 'Sentadilla', 'sentadilla trasera, back squat'],
@@ -219,7 +224,7 @@ const LIBRARY = {
     ['Lunges', 'Zancadas', 'estocadas, lunges'],
     ['Walking lunges', 'Zancadas caminando', 'estocadas caminando'],
     ['Reverse lunges', 'Zancadas hacia atrás'],
-    ['Step-ups', 'Subidas al cajón', 'step up'],
+    ['Step-ups', 'Step-ups', 'subidas al cajón, step up'],
     ['Sissy squat', 'Sissy squat', '', BW],
     ['Pistol squat', 'Sentadilla pistol', 'pistol', BW],
     ['Safety bar squat', 'Sentadilla con barra safety', 'ssb'],
@@ -230,9 +235,9 @@ const LIBRARY = {
     ['Horizontal leg press', 'Prensa horizontal'],
     ['V-squat machine', 'Sentadilla en V', 'v squat'],
     ['Single-leg extension', 'Extensión de cuádriceps a una pierna'],
-    ['Reverse Nordic', 'Nórdico inverso', '', BW],
+    ['Reverse Nordic', 'Reverse Nordic', 'nórdico inverso', BW],
     ['Jump squats', 'Sentadillas con salto', '', BW],
-    ['Air squats', 'Sentadillas sin peso', 'sentadillas libres', BW],
+    ['Air squats', 'Air squats', 'sentadillas sin peso, sentadillas libres', BW],
   ],
   hamstrings: [
     ['Romanian deadlift', 'Peso muerto rumano', 'rdl, rumano'],
@@ -263,11 +268,11 @@ const LIBRARY = {
     ['Hip abduction machine', 'Abductores en máquina', 'abductor'],
     ['Hip adduction machine', 'Aductores en máquina', 'aductor'],
     ['Frog pumps', 'Frog pumps', '', BW],
-    ['B-stance hip thrust', 'Hip thrust en B'],
+    ['B-stance hip thrust', 'B-stance hip thrust', 'hip thrust en b'],
     ['Single-leg glute bridge', 'Puente de glúteo a una pierna'],
     ['Cable hip abduction', 'Abducción de cadera en polea', 'abductor en polea'],
     ['Curtsy lunge', 'Zancada cruzada', 'reverencia'],
-    ['Banded lateral walk', 'Pasos laterales con banda', 'monster walk, banda', BW],
+    ['Banded lateral walk', 'Monster walk', 'pasos laterales con banda, monster walk, banda', BW],
     ['Fire hydrants', 'Fire hydrants', 'patada lateral en cuadrupedia', BW],
     ['Donkey kicks', 'Patada de glúteo en cuadrupedia', 'donkey kicks', BW],
   ],
@@ -277,9 +282,9 @@ const LIBRARY = {
     ['Seated calf raise', 'Gemelos sentado', 'sóleo'],
     ['Leg press calf raise', 'Gemelos en prensa'],
     ['Smith machine calf raise', 'Gemelos en multipower', 'smith'],
-    ['Tibialis raise', 'Elevación de tibial', 'tibial'],
+    ['Tibialis raise', 'Tibialis raise', 'elevación de tibial, tibial'],
     ['Single-leg calf raise', 'Gemelos a una pierna'],
-    ['Donkey calf raise', 'Gemelos burro'],
+    ['Donkey calf raise', 'Donkey calf raise', 'gemelos burro'],
   ],
   core: [
     ['Crunch', 'Crunch', 'abdominales, encogimientos abdominales', BW],
@@ -301,15 +306,15 @@ const LIBRARY = {
     ['Cable woodchop', 'Leñador en polea', 'leñador, woodchopper'],
     ['Dumbbell side bend', 'Inclinación lateral con mancuerna', 'oblicuos'],
     ['Dead bug', 'Dead bug', 'bicho muerto', BW],
-    ['Mountain climbers', 'Escaladores', 'mountain climbers', BW],
+    ['Mountain climbers', 'Mountain climbers', 'escaladores, mountain climbers', BW],
     ['Reverse crunch', 'Crunch inverso', '', BW],
     ['Oblique crunch', 'Crunch oblicuo', 'oblicuos', BW],
     ['Decline sit-ups', 'Sit-ups declinados', '', BW],
     ['Hanging windshield wipers', 'Limpiaparabrisas', 'windshield wipers', BW],
-    ['Landmine rotation', 'Rotación landmine', 'landmine twist'],
+    ['Landmine rotation', 'Landmine rotation', 'rotación landmine, landmine twist'],
     ['Hollow rocks', 'Hollow rocks', 'balanceo hollow', BW],
-    ['Flutter kicks', 'Tijeras', 'flutter kicks', BW],
-    ['Heel taps', 'Toques de talón', 'heel taps', BW],
+    ['Flutter kicks', 'Flutter kicks', 'tijeras, flutter kicks', BW],
+    ['Heel taps', 'Heel taps', 'toques de talón, heel taps', BW],
   ],
   fullbody: [
     ['Power clean', 'Cargada de potencia', 'power clean'],
@@ -321,12 +326,12 @@ const LIBRARY = {
     ['Push jerk', 'Push jerk', 'envión'],
     ['Split jerk', 'Envión en tijera', 'split jerk'],
     ['Thruster', 'Thruster'],
-    ['Overhead squat', 'Sentadilla overhead', 'sentadilla por encima de la cabeza'],
+    ['Overhead squat', 'Overhead squat', 'sentadilla overhead, sentadilla por encima de la cabeza'],
     ['Kettlebell swing', 'Swing con kettlebell', 'swing, pesa rusa'],
     ['Kettlebell snatch', 'Arrancada con kettlebell', 'pesa rusa'],
     ['Kettlebell clean', 'Cargada con kettlebell', 'pesa rusa'],
     ['Turkish get-up', 'Turkish get-up', 'levantamiento turco'],
-    ['Renegade row', 'Remo renegado', 'renegade row'],
+    ['Renegade row', 'Renegade row', 'remo renegado, renegade row'],
     ['Wall balls', 'Wall balls', 'lanzamientos a la pared'],
     ['Burpees', 'Burpees', '', BW],
     ['Box jumps', 'Saltos al cajón', 'box jump', BW],
@@ -334,17 +339,17 @@ const LIBRARY = {
     ['Hang snatch', 'Arrancada colgante'],
     ['Clean pull', 'Tirón de cargada'],
     ['Snatch pull', 'Tirón de arrancada'],
-    ['Sumo deadlift high pull', 'Tirón sumo al mentón', 'sdhp'],
+    ['Sumo deadlift high pull', 'Sumo deadlift high pull', 'tirón sumo al mentón, sdhp'],
     ['Dumbbell snatch', 'Arrancada con mancuerna'],
     ['Dumbbell thruster', 'Thruster con mancuernas'],
     ['Devil press', 'Devil press'],
-    ['Medicine ball slam', 'Slam con balón medicinal', 'balón medicinal, slam ball'],
+    ['Medicine ball slam', 'Med ball slam', 'slam con balón medicinal, balón medicinal, slam ball'],
     ['Log press', 'Log press', 'strongman'],
     ['Tire flip', 'Volteo de neumático', 'rueda, strongman'],
-    ['Atlas stone', 'Piedras Atlas', 'strongman'],
+    ['Atlas stone', 'Atlas stones', 'piedras atlas, strongman'],
     ['Jumping jacks', 'Jumping jacks', 'saltos de tijera', BW],
     ['Broad jumps', 'Saltos de longitud', '', BW],
-    ['Double unders', 'Dobles saltos', 'comba, double unders', BW],
+    ['Double unders', 'Double unders', 'dobles saltos, comba, double unders', BW],
   ],
   cardio: [],
 };
@@ -355,9 +360,9 @@ export const norm = (s) => key(s).normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 const INDEX = new Map();
 for (const [cat, list] of Object.entries(LIBRARY)) {
-  for (const [en, es, aliases = '', bw = 0] of list) {
+  for (const [en, es, aliases = '', kind = 0] of list) {
     const tags = aliases.split(',').map((a) => norm(a)).filter(Boolean);
-    INDEX.set(key(en), { name: en, es, cat, bw: Boolean(bw), custom: false, tags });
+    INDEX.set(key(en), { name: en, es, cat, bw: kind === BW, assisted: kind === ASSIST, custom: false, tags });
   }
 }
 
