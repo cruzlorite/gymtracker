@@ -452,6 +452,19 @@ export class SheetStore {
     return append(id, TAB.challenges, [[c.id, c.title, c.type, c.exercise || '', c.start, c.end, this.me.email]]);
   }
 
+  /** Deletes a challenge's row(s) from _challenges. */
+  async deleteChallenge(id, challengeId) {
+    const { tabs } = await this.tabs(id);
+    const tab = tabs.find((x) => x.title === TAB.challenges);
+    const r = await api(`${SHEETS}/${id}/values/${enc(`${TAB.challenges}!A:A`)}`);
+    const rows = (r.values || []).flatMap((row, i) => (i > 0 && String(row[0]) === challengeId ? [i] : []));
+    if (!tab || !rows.length) return; // already gone
+    await api(`${SHEETS}/${id}:batchUpdate`, {
+      method: 'POST',
+      body: { requests: rows.reverse().map((i) => ({ deleteDimension: { range: { sheetId: tab.sheetId, dimension: 'ROWS', startIndex: i, endIndex: i + 1 } } })) },
+    });
+  }
+
   /** A group's custom exercise. Creates the _exercises tab first if it's missing. */
   async addExercise(id, ex) {
     if (!this.meta.get(id)?.hasExercises) {

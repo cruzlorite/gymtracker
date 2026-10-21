@@ -404,6 +404,7 @@ function shell(content) {
         ${S.groups.length || g ? `<button class="group-btn" data-action="group-menu"><span>${esc(g?.name || t('group.groups'))}</span>${icon('down')}</button>` : '<span class="wordmark">GymTracker</span>'}
         <span class="spacer"></span>
         <span id="sync"></span>
+        ${logForPicker()}
         <button class="avatar-btn" data-action="settings" aria-label="${t('settings.title')}">${avatar({ ...me, color: member(me.email)?.color || COLORS[0] })}</button>
       </header>
       ${S.store.kind === 'demo' ? `<div class="demo-bar">${t('demo.bar')}</div>` : ''}
@@ -458,15 +459,17 @@ function suspiciousNote() {
 
 /** "Logging for" chips on the Workout tab, when you may log sets for other members. */
 /** "Logging for" as a small pill; tapping it lists the members. Highlighted while logging for someone else. */
+/**
+ * "Logging for" lives in the app bar on the Workout tab: a small people icon while logging your own sets,
+ * the member's picture and name (highlighted) while logging someone else's. Tapping it lists the members.
+ */
 function logForPicker() {
-  if (!canLogForOthers()) return '';
+  if (S.tab !== 'log' || !canLogForOthers()) return '';
   const who = member(target());
   const other = who.email !== S.me.email;
-  return `<div class="for-row">
-      <button class="for-pill ${other ? 'other' : ''}" data-action="log-for-menu" aria-label="${t('log.for')}">${avatar(who)}
-        <span>${t('log.forShort', { name: esc(other ? who.name.split(' ')[0] : t('common.you')) })}</span>${icon('down')}</button>
-      ${other ? `<button class="icon-btn sm" data-action="log-for" data-e="${esc(S.me.email)}" aria-label="${t('log.forBack')}">${icon('x')}</button>` : ''}
-    </div>`;
+  const label = `${t('log.for')}: ${other ? who.name : t('common.you')}`;
+  return `<button class="for-chip ${other ? 'other' : ''}" data-action="log-for-menu" aria-label="${esc(label)}" title="${esc(label)}">
+    ${other ? `${avatar(who)}<span>${esc(who.name.split(' ')[0])}</span>` : icon('users')}${icon('down')}</button>`;
 }
 
 function logForMenu() {
@@ -592,8 +595,7 @@ function viewLog() {
   const sets = [...byEx.values()].reduce((a, l) => a + l.reduce((b, e) => b + (e.sets || 1), 0), 0);
   const vol = St.volume(es);
 
-  const forPill = logForPicker();
-  const nav = `<div class="daynav ${forPill ? 'with-for' : ''}">
+  const nav = `<div class="daynav">
     <button class="icon-btn" data-action="day" data-d="${St.addDays(day, -1)}" aria-label="${t('day.prev')}">${icon('left')}</button>
     <label class="daynav-label">
       <span class="daynav-rel">${day === today || daysAgo(day) === 1 ? relDay(day) : cap(df({ weekday: 'long' }).format(St.parseISO(day)))}</span>
@@ -601,7 +603,6 @@ function viewLog() {
       <input type="date" data-change="day" value="${day}" max="${today}" aria-label="${t('day.pick')}">
     </label>
     <button class="icon-btn" data-action="day" data-d="${St.addDays(day, 1)}" ${day >= today ? 'disabled' : ''} aria-label="${t('day.next')}">${icon('right')}</button>
-    ${forPill}
   </div>`;
 
   let body;
@@ -981,7 +982,8 @@ function viewChallenges() {
       const creator = member(c.createdBy);
       return `<article class="card challenge ${st.key}">
         <header>
-          <div class="challenge-tags"><span class="badge">${t(`ch.${c.type}`)}${c.exercise ? ` · ${esc(Ex.exName(c.exercise))}` : ''}</span><span class="status ${st.key}">${st.label}</span></div>
+          <div class="challenge-tags"><span class="badge">${t(`ch.${c.type}`)}${c.exercise ? ` · ${esc(Ex.exName(c.exercise))}` : ''}</span><span class="status ${st.key}">${st.label}</span>
+            ${c.createdBy === S.me.email || S.group.isOwner ? `<button class="icon-btn sm ch-del" data-action="challenge-delete" data-id="${esc(c.id)}" aria-label="${t('ch.delete')}">${icon('trash')}</button>` : ''}</div>
           <h3>${esc(c.title)}</h3>
           <p class="muted">${fmtDate(c.start)} – ${fmtDate(c.end)}${creator ? ` · ${t('ch.by', { name: esc(creator.name) })}` : ''}</p>
         </header>
@@ -1755,6 +1757,18 @@ const actions = {
   reconnect: () => reconnect(),
   'sync-error': () => syncErrorModal(),
   'group-settings': () => openGroupSettings(),
+  'challenge-delete': (el) => {
+    const c = S.group.challenges.find((x) => x.id === el.dataset.id);
+    if (!c) return;
+    const gid = S.group.id;
+    confirmModal(t('ch.deleteTitle', { title: esc(c.title) }), t('ch.deleteText'), t('common.delete'), () => run(async () => {
+      await S.store.deleteChallenge(gid, c.id);
+      S.group.challenges = S.group.challenges.filter((x) => x.id !== c.id);
+      saveCache();
+      render();
+      toast(t('ch.deleted'), { ic: 'trash' });
+    }));
+  },
   'log-for': (el) => { closeModal(); S.logFor = el.dataset.e === S.me.email ? '' : el.dataset.e; render(); },
   'log-for-menu': () => logForMenu(),
   'create-solo': () => run(async () => {

@@ -131,6 +131,8 @@ export class DemoStore {
 
   async addChallenge(id, c) { this.#get(id).challenges.push({ ...c, createdBy: this.me.email }); }
 
+  async deleteChallenge(id, challengeId) { const g = this.#get(id); g.challenges = g.challenges.filter((c) => c.id !== challengeId); }
+
   async addExercise(id, ex) { this.#get(id).exercises.push(ex); }
 
   async invite(id, email) {

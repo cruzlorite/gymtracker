@@ -519,23 +519,17 @@ body:has(#restbar.show) .fab { bottom: calc(var(--nav-h) + var(--safe-b) + 92px)
 .for-notice > .ic { color: var(--accent-text); }
 .for-who { color: var(--accent-text); }
 
-/* "Logging for" pill */
-/* Day row with the "logging for" pill: ‹ date › on the left, the pill on the right. */
-.daynav.with-for { justify-content: flex-start; gap: 2px; }
-.daynav.with-for .daynav-label { justify-items: start; padding: 2px 6px; }
-.daynav.with-for .daynav-rel { font-size: 20px; }
-.daynav-date, .daynav-rel { white-space: nowrap; }
-.for-row { display: flex; align-items: center; gap: 2px; margin-left: auto; min-width: 0; }
-.for-pill span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 9em; }
-.for-pill {
-  display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 8px 0 3px; border-radius: 999px;
-  border: 1px solid var(--line); background: var(--surface); font-size: 13.5px; font-weight: 600;
+/* "Logging for" chip in the app bar (Workout tab) */
+.for-chip {
+  display: inline-flex; align-items: center; gap: 4px; height: 38px; padding: 0 6px 0 9px; flex: none;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--muted); font-size: 13.5px; font-weight: 700;
 }
-.for-pill .av { width: 26px; height: 26px; font-size: 11px; }
-.for-pill .ic { width: 16px; height: 16px; color: var(--muted); }
-.for-pill.other { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.for-pill.other .ic { color: var(--accent-ink); }
-@media (pointer: coarse) { .for-pill { height: 40px; } }
+.for-chip .ic { width: 18px; height: 18px; }
+.for-chip .ic + .ic { width: 15px; height: 15px; }
+.for-chip.other { padding-left: 3px; background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.for-chip .av { width: 28px; height: 28px; font-size: 11px; }
+.for-chip span:not(.av) { max-width: 6.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (pointer: coarse) { .for-chip { height: 44px; } }
 
 /* Invite: share buttons */
 .share-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
@@ -696,6 +690,8 @@ body.sheet-open .restbar, body:not(:has(.has-nav)) .restbar { bottom: calc(var(-
 .bar i { display: block; height: 100%; border-radius: 99px; }
 .val { font-variant-numeric: tabular-nums; font-weight: 700; text-align: right; min-width: 4.5em; font-size: 14px; }
 .challenge-tags { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.challenge-tags .ch-del { margin-left: auto; }
+.challenge-tags .ch-del:hover { color: var(--danger); background: var(--danger-soft); }
 .challenge h3 { margin-top: 10px; font-size: 18px; }
 .status { font-size: 12.5px; font-weight: 700; }
 .status.live { color: var(--up); }

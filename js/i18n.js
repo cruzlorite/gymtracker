@@ -163,6 +163,7 @@ const es = {
   'ch.titleLabel': 'Título', 'ch.titlePlaceholder': 'p. ej. Noviembre sin fallar', 'ch.type': 'Tipo', 'ch.exercise': 'Ejercicio (opcional; sin él cuentan todos)',
   'ch.allExercises': 'Todos los ejercicios', 'ch.start': 'Empieza', 'ch.end': 'Termina', 'ch.create': 'Crear reto',
   'ch.badDates': 'La fecha de fin es anterior a la de inicio.', 'ch.created': 'Reto creado.',
+  'ch.delete': 'Borrar reto', 'ch.deleteTitle': '¿Borrar «{title}»?', 'ch.deleteText': 'El reto desaparece para todo el grupo. Los entrenos no se tocan.', 'ch.deleted': 'Reto borrado.',
 
   'members.noWorkouts': 'Sin entrenos todavía.', 'members.since': 'en el grupo desde {date}', 'members.totalDays': 'Días totales',
   'members.last30': 'Últimos 30 días', 'members.improvement90': 'Mejora 90 días', 'members.recent': 'Últimos entrenos',
@@ -371,6 +372,7 @@ const en = {
   'ch.titleLabel': 'Title', 'ch.titlePlaceholder': 'e.g. No-miss November', 'ch.type': 'Type', 'ch.exercise': 'Exercise (optional; otherwise all count)',
   'ch.allExercises': 'All exercises', 'ch.start': 'Starts', 'ch.end': 'Ends', 'ch.create': 'Create challenge',
   'ch.badDates': 'The end date is before the start date.', 'ch.created': 'Challenge created.',
+  'ch.delete': 'Delete challenge', 'ch.deleteTitle': 'Delete "{title}"?', 'ch.deleteText': 'The challenge disappears for the whole group. Workouts are not touched.', 'ch.deleted': 'Challenge deleted.',
 
   'members.noWorkouts': 'No workouts yet.', 'members.since': 'in the group since {date}', 'members.totalDays': 'Total days',
   'members.last30': 'Last 30 days', 'members.improvement90': '90-day improvement', 'members.recent': 'Recent workouts',
