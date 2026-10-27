@@ -708,7 +708,7 @@ const selCat = (sel) => (sel.kind === 'cat' ? Ex.CATEGORIES.find((c) => c.id ===
 const selLabel = (sel) => (sel.kind === 'all' ? t('progress.allExercises')
   : sel.kind === 'cat' ? t('progress.allOf', { group: Ex.catLabel(selCat(sel)) }) : Ex.exName(sel.name));
 /** Several exercises can only be added up as improvement (%), volume or sets; one exercise has more. */
-const selMetrics = (sel) => (sel.kind !== 'ex' ? ['improvement', 'volume', 'sets']
+const selMetrics = (sel) => (sel.kind !== 'ex' ? ['improvement', 'weightGain', 'volume', 'sets']
   : !hasWeight(sel.name) ? ['reps'] : isAssisted(sel.name) ? ['weight', 'reps'] : ['improvement', ...St.METRICS]);
 const selMetric = (sel) => (selMetrics(sel).includes(S.metric) ? S.metric : selMetrics(sel)[0]);
 /** Weekly totals for groups of exercises; daily values for one exercise. */
@@ -723,6 +723,7 @@ function currentSel() {
 /** One member's series for the chart. */
 function progressSeries(entries, sel, metric, r) {
   if (metric === 'improvement') return St.improvementSeries(entries, r, selKeep(sel));
+  if (metric === 'weightGain') return St.improvementSeries(entries, r, selKeep(sel), 'weight');
   if (isWeekly(sel, metric)) return St.weeklySeries(entries, r, metric, selKeep(sel));
   return St.dailySeries(entries.filter((e) => e.date >= r.from && e.date <= r.to), sel.name, metric).filter((p) => p.value !== 0);
 }
@@ -738,7 +739,7 @@ const metricsFor = (name) => (!hasWeight(name) ? ['reps'] : isAssisted(name) ? [
 const fmtMetric = (metric, v, d = 1) => (metric === 'reps' ? t('unit.reps', { n: fmtN(v) })
   : metric === 'volume' ? fmtKg(v)
     : metric === 'sets' ? t('unit.sets', { n: fmtN(v) })
-      : metric === 'improvement' ? `${v > 0 ? '+' : ''}${fmtN(v, d)} %`
+      : metric === 'improvement' || metric === 'weightGain' ? `${v > 0 ? '+' : ''}${fmtN(v, d)} %`
         : `${fmtN(v, d)} kg`);
 
 function metricChips(name, current, action) {

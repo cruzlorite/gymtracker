@@ -224,7 +224,7 @@ export function exerciseSummary(entries, exercise) {
  * estimated 1RM so far beats that exercise's first day in the range. Only exercises with at least two
  * days in the range count (as in `improvement`), so it's fair between people of different levels.
  */
-export function improvementSeries(entries, r, keep = () => true) {
+export function improvementSeries(entries, r, keep = () => true, by = 'e1rm') {
   const byEx = new Map();
   for (const e of entries) {
     if (!e.exercise || !inRange(e, r) || !keep(e)) continue;
@@ -233,7 +233,8 @@ export function improvementSeries(entries, r, keep = () => true) {
   }
   const series = [];
   for (const [ex, es] of byEx) {
-    const days = bestByDate(es, ex).filter((p) => p.value > 0);
+    // by: 'e1rm' (estimated 1RM) or 'weight' (heaviest weight actually lifted that day).
+    const days = dailySeries(es, ex, by).filter((p) => p.value > 0);
     if (days.length >= 2) series.push(days);
   }
   const dates = [...new Set(series.flatMap((s) => s.map((p) => p.date)))].sort();
