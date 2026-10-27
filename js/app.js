@@ -4,6 +4,8 @@ import * as St from './stats.js';
 import * as Ex from './exercises.js';
 import * as Timer from './timer.js';
 import { Outbox } from './outbox.js';
+import * as A from './achievements.js';
+import { medalSVG } from './medals.js';
 import { icon, logo, googleG } from './icons.js';
 import { t, getLang, setLang, locale } from './i18n.js';
 
@@ -35,7 +37,7 @@ const S = {
   store: null, me: null, groups: [], group: null, outbox: null,
   tab: 'home', groupTab: 'ranking', logFor: '',
   day: St.todayISO(), period: '30', month: St.todayISO().slice(0, 7), sel: { kind: 'all' }, metric: 'improvement', compare: true, profile: '',
-  sheet: null, // { kind: 'picker', q, cat } | { kind: 'exercise', name, view, edit, w, r }
+  sheet: null, // { kind: 'picker', q, cat } | { kind: 'exercise', name, view, edit, w, r } | { kind: 'achievements', email, cat, open, back }
   pendingGroup: params.get('group'), needsPicker: null, chart: null, loadedAt: 0,
 };
 
@@ -104,14 +106,14 @@ function hideToast() {
   $toast.className = '';
   if (popover) setTimeout(() => { if (!$toast.classList.contains('show')) try { $toast.hidePopover(); } catch { /* already hidden */ } }, 250);
 }
-function toast(msg, { error = false, action, onAction, ic, duration } = {}) {
+function toast(msg, { error = false, action, onAction, ic, media, duration } = {}) {
   clearTimeout(toastTimer);
   if (popover) {
     try { $toast.hidePopover(); } catch { /* not shown */ }
     $toast.showPopover();
   }
   $toast.className = `show${error ? ' error' : ''}`;
-  $toast.innerHTML = `${ic ? icon(ic) : ''}<span>${esc(msg)}</span>${action ? `<button class="toast-btn" data-toast-action>${esc(action)}</button>` : ''}`;
+  $toast.innerHTML = `${media || (ic ? icon(ic) : '')}<span>${esc(msg)}</span>${action ? `<button class="toast-btn" data-toast-action>${esc(action)}</button>` : ''}`;
   if (action) $toast.querySelector('[data-toast-action]').onclick = () => { hideToast(); onAction(); };
   toastTimer = setTimeout(hideToast, duration ?? (action ? 15000 : error ? 10000 : 3500));
 }
@@ -515,6 +517,8 @@ function viewHome() {
     for (const [date, list] of groupByDate(entriesOf(m.email).filter((e) => e.exercise && e.date >= since))) activity.push({ m, date, ex: [...new Set(list.map((e) => e.exercise))] });
   }
   activity.sort((a, b) => (a.date < b.date ? 1 : -1));
+  const imp30 = St.improvement(es, St.periodRange('30')).score;
+  const monthPrs = es.filter((e) => prs.has(e.id) && e.date >= monthFrom).length;
 
   return `<div class="home-head">
       <h1>${S.store.kind === 'demo' || !first ? t('home.helloAnon') : t('home.hello', { name: esc(first) })}</h1>
@@ -534,8 +538,12 @@ function viewHome() {
       <div class="tile"><span>${t('ranking.streak')}</span><strong>${t('unit.weeks', { n: fmtN(St.weekStreak(es)) })}</strong></div>
       <div class="tile"><span>${t('home.month')}</span><strong>${t('home.sessions', { n: fmtN(St.attendance(es, { from: monthFrom, to: today })) })}</strong></div>
       <div class="tile"><span>${t('home.weekVolume')}</span><strong>${fmtKg(St.volume(es, week))}</strong></div>
+      <div class="tile"><span>${t('home.improvement30')}</span><strong class="${imp30 > 0 ? 'up' : imp30 < 0 ? 'down' : ''}">${imp30 == null ? '—' : fmtPct(imp30)}</strong></div>
+      <div class="tile"><span>${t('home.monthPrs')}</span><strong>${fmtN(monthPrs)}</strong></div>
     </div>
+    ${homeAchievements()}
     <div class="grid two">
+      ${homeChallenges()}
       <section class="card">
         <h3>${icon('chart')} ${t('home.volumeTrend')}</h3>
         <div class="vol-bars">${vols.map((v, i) => `<div class="vol-col ${i === 7 ? 'now' : ''}" title="${fmtKg(v)}"><i style="height:${Math.max(v ? 4 : 0, v / maxVol * 100)}%"></i><span>${df({ day: 'numeric', month: 'short' }).format(St.parseISO(weeks[i]))}</span></div>`).join('')}</div>
@@ -1084,9 +1092,193 @@ function viewMembers() {
             <tbody>${prs.map((p) => `<tr><td>${esc(Ex.exName(p.exercise))}</td><td class="r">${fmtW(p.best.weight)} × ${fmtN(p.best.reps)}</td><td class="r"><strong>${fmtN(p.e1rm, 1)} kg</strong></td></tr>`).join('')}</tbody></table>`
             : `<p class="muted">${t('progress.noRecords')}</p>`}
         </div>
+        ${profileAchievements(m.email)}
       </div>
       <div class="card"><h3>${t('members.recent')}</h3>${sessionList(es)}</div>
     </div>`;
+}
+
+// ---------- Achievements ----------
+// Evaluated from the logged sets on demand and memoised per person; the key changes with any added,
+// removed or edited set (a cheap checksum), so a stale result never shows.
+const achMemo = new Map();
+function achOf(email) {
+  const g = S.group;
+  let sum = 0;
+  for (const e of g.entries) sum = (sum + (+e.weight || 0) * 31 + (+e.reps || 0) * 7 + (+e.sets || 1)) % 1e9;
+  const key = `${g.id}|${email}|${g.entries.length}|${g.entries[g.entries.length - 1]?.id || ''}|${sum}|${(g.challenges || []).length}|${g.members.length}`;
+  const hit = achMemo.get(email);
+  if (hit?.key === key) return hit.a;
+  if (achMemo.size > 30) achMemo.clear();
+  const a = A.evaluate(email, g);
+  // Group achievements make no sense alone: hidden (and not counted) in a one-person group.
+  if (solo()) {
+    a.families = a.families.filter((f) => f.cat !== 'group');
+    a.unlocked = a.unlocked.filter((u) => u.family.cat !== 'group');
+    a.done = a.unlocked.length;
+    a.total = a.families.reduce((n, f) => n + f.tiers.length, 0);
+  }
+  achMemo.set(email, { key, a });
+  return a;
+}
+const achCats = () => A.ACH_CATS.filter(([id]) => id !== 'group' || !solo());
+
+function medalOf(f, tier, { size = 56, locked = !tier.date } = {}) {
+  const { text, unit } = A.face(f, tier.th);
+  return medalSVG({ key: `${f.id}:${tier.th}`, cat: f.cat, metal: tier.medal, locked, text, unit, size });
+}
+/** Name of one tier: its fun name if it has one ("Un elefante"), else the family's title. */
+const tierName = (f, tier) => A.tr(tier.name) || A.tr(f.title);
+/** "45 / 60 kg": how far along the next tier is. */
+function tierProgress(f, tier) {
+  if (f.id === 'tonnage' || f.id === 'sessionvol') return `${fmtKg(f.value)} / ${fmtKg(tier.th)}`;
+  const { unit } = A.face(f, tier.th);
+  return `${fmtN(f.value)} / ${fmtN(tier.th)}${unit ? ` ${esc(unit)}` : ''}`;
+}
+function tierRatio(f, tier) {
+  const prev = tier.i ? f.tiers[tier.i - 1].th : 0;
+  return Math.max(0, Math.min(1, (f.value - prev) / (tier.th - prev || 1)));
+}
+/** Closest achievements to unlock, skipping lifts never tried and one-day specials. */
+function nextAchievements(a, n = 3) {
+  return a.families.filter((f) => f.next && !f.emoji && f.id !== 'comeback' && (f.value > 0 || f.next.i === 0) && !(f.lift && !f.value))
+    .map((f) => ({ f, r: tierRatio(f, f.next) })).filter((x) => x.r > 0 || !x.f.next.i)
+    .sort((x, y) => y.r - x.r).slice(0, n).map((x) => x.f);
+}
+
+function medalTile(u, email) {
+  return `<button class="medal-tile" data-action="achievements" data-e="${esc(email)}" data-cat="${u.family.cat}" data-open="${esc(u.family.id)}" title="${esc(A.tr(u.tier.label))}">
+    ${medalOf(u.family, u.tier, { size: 52 })}<span class="medal-name">${esc(tierName(u.family, u.tier))}</span><span class="medal-date">${relDay(u.date)}</span></button>`;
+}
+
+function nextRow(f, email) {
+  const tier = f.next;
+  return `<li><button class="ach-next" data-action="achievements" data-e="${esc(email)}" data-cat="${f.cat}" data-open="${esc(f.id)}">
+    ${medalOf(f, tier, { size: 34 })}
+    <span class="ach-next-text"><strong>${esc(tierName(f, tier))}</strong><span class="muted">${esc(A.tr(tier.label))}</span></span>
+    <span class="ach-next-prog"><span class="bar"><i style="width:${tierRatio(f, tier) * 100}%"></i></span><em>${tierProgress(f, tier)}</em></span>
+  </button></li>`;
+}
+
+function homeAchievements() {
+  const me = S.me.email;
+  const a = achOf(me);
+  const latest = a.unlocked.slice(0, 6);
+  const next = nextAchievements(a);
+  return `<section class="card ach-card">
+    <h3>${icon('trophy')} ${t('ach.title')} <span class="ach-count">${t('ach.of', { n: fmtN(a.done), total: fmtN(a.total) })}</span>
+      <button class="btn ghost sm" data-action="achievements" data-e="${esc(me)}">${t('ach.seeAll')}</button></h3>
+    ${latest.length ? `<div class="medal-strip">${latest.map((u) => medalTile(u, me)).join('')}</div>` : `<p class="muted">${t('ach.none')}</p>`}
+    ${next.length ? `<h4 class="ach-sub">${t('ach.next')}</h4><ul class="ach-next-list">${next.map((f) => nextRow(f, me)).join('')}</ul>` : ''}
+  </section>`;
+}
+
+/** Live challenges with my position, plus the ones that finished in the last two weeks. */
+function homeChallenges() {
+  if (solo()) return '';
+  const today = St.todayISO();
+  const list = (S.group.challenges || []).filter((c) => c.start <= today && c.end >= St.addDays(today, -14))
+    .sort((a, b) => (a.end < today) - (b.end < today) || a.end.localeCompare(b.end)).slice(0, 4);
+  if (!list.length) return '';
+  return `<section class="card">
+    <h3>${icon('flag')} ${t('home.challenges')}</h3>
+    <ul class="home-ch">${list.map((c) => {
+      const st = challengeStatus(c);
+      const ranked = members().map((m) => ({ m, v: St.challengeValue(c, entriesOf(m.email)) })).filter((x) => x.v != null).sort((a, b) => b.v - a.v);
+      const pos = ranked.findIndex((x) => x.m.email === S.me.email);
+      const lead = ranked[0];
+      const line = st.key === 'finished'
+        ? (lead?.v > 0 ? (lead.m.email === S.me.email ? t('home.chYouWon') : t('ch.winner', { name: esc(lead.m.name) })) : t('ch.finished'))
+        : pos === 0 ? t('home.chLeading') : pos > 0 ? t('home.chPos', { n: pos + 1, total: ranked.length, name: esc(lead.m.name) }) : t('home.chNoData');
+      return `<li><button class="link-row" data-action="go-challenges">
+        <span class="home-ch-main"><strong>${esc(c.title)}</strong><span class="muted">${line}</span></span>
+        <span class="status ${st.key}">${st.label}</span></button></li>`;
+    }).join('')}</ul>
+  </section>`;
+}
+
+function achievementsSheet() {
+  const sh = S.sheet;
+  const who = member(sh.email) || member(S.me.email);
+  const a = achOf(who.email);
+  const fams = a.families.filter((f) => sh.cat === 'all' || f.cat === sh.cat);
+  const metals = { bronze: 0, silver: 0, gold: 0, platinum: 0 };
+  for (const u of a.unlocked) metals[u.tier.medal]++;
+  const cats = [['all', null, 'trophy'], ...achCats()];
+  const row = (f) => {
+    const top = f.level ? f.tiers[f.level - 1] : f.tiers[0];
+    const open = sh.open === f.id;
+    return `<article class="ach-fam ${open ? 'open' : ''} ${f.level ? '' : 'none'}" id="ach-${esc(f.id)}">
+      <button class="ach-fam-head" data-action="ach-open" data-id="${esc(f.id)}" aria-expanded="${open}">
+        ${medalOf(f, top, { size: 46 })}
+        <span class="ach-fam-text"><strong>${esc(A.tr(f.title))}</strong>
+          <span class="muted">${f.tiers.length > 1 ? t('ach.level', { n: f.level, total: f.tiers.length }) : f.level ? t('ach.unlocked') : t('ach.locked')}${f.next && f.tiers.length > 1 ? ` · ${esc(A.tr(f.next.label))}` : ''}</span>
+          ${f.next && f.tiers.length > 1 ? `<span class="bar"><i style="width:${tierRatio(f, f.next) * 100}%"></i></span>` : ''}</span>
+        <span class="ach-chev">${icon('down')}</span>
+      </button>
+      ${open ? `${f.sub ? `<p class="fine">${esc(A.tr(f.sub))}</p>` : ''}<div class="ach-tiers">${f.tiers.map((tier) => `<div class="ach-tier ${tier.date ? 'got' : ''}">
+          ${medalOf(f, tier, { size: 54 })}
+          <strong>${esc(tier.name ? A.tr(tier.name) : A.tr(tier.label))}</strong>
+          ${tier.name ? `<span class="muted">${esc(A.tr(tier.label))}</span>` : ''}
+          <em>${tier.date ? fmtDate(tier.date) : tier === f.next && f.value > 0 ? tierProgress(f, tier) : '—'}</em>
+        </div>`).join('')}</div>` : ''}
+    </article>`;
+  };
+  let list = '';
+  if (sh.cat === 'all') {
+    for (const [id, label] of achCats()) list += `<h3 class="list-head">${esc(A.tr(label))}</h3>${fams.filter((f) => f.cat === id).map(row).join('')}`;
+  } else list = fams.map(row).join('');
+  return `<header class="sheet-head">
+      <button class="icon-btn" data-action="close-sheet" aria-label="${t('common.back')}">${icon('left')}</button>
+      <div class="sheet-title"><h2>${who.email === S.me.email ? t('ach.title') : t('ach.titleOf', { name: esc(who.name.split(' ')[0]) })}</h2>
+        <span class="muted">${t('ach.of', { n: fmtN(a.done), total: fmtN(a.total) })}</span></div>
+    </header>
+    <div class="sheet-body">
+      <div class="ach-summary">
+        <span class="bar"><i style="width:${a.done / (a.total || 1) * 100}%"></i></span>
+        <div class="ach-metals">${Object.entries(metals).map(([k, n]) => `<span class="metal-count ${k}"><i></i>${fmtN(n)} ${t(`ach.${k}`)}</span>`).join('')}</div>
+      </div>
+      <div class="cats">${cats.map(([id, label, ic]) => `<button class="chip ${sh.cat === id ? 'on' : ''}" data-action="ach-cat" data-cat="${id}">${icon(ic)}${label ? esc(A.tr(label)) : t('picker.all')}</button>`).join('')}</div>
+      <div class="ach-list">${list}</div>
+    </div>`;
+}
+
+function openAchievements(email, cat = 'all', open = null) {
+  const back = S.sheet && S.sheet.kind !== 'achievements' ? S.sheet : S.sheet?.back || null;
+  openSheet({ kind: 'achievements', email, cat, open, back });
+  if (open) document.getElementById(`ach-${open}`)?.scrollIntoView({ block: 'start' });
+}
+
+// Unlock notices: the unlocked keys seen last time for each person, compared after every saved set.
+const achSeen = new Map();
+const seenKey = (email) => `${S.group.id}|${email}`;
+function achBaseline(email) {
+  if (!achSeen.has(seenKey(email))) achSeen.set(seenKey(email), new Set(achOf(email).unlocked.map((u) => u.key)));
+}
+function checkUnlocks(email) {
+  const before = achSeen.get(seenKey(email));
+  const a = achOf(email);
+  achSeen.set(seenKey(email), new Set(a.unlocked.map((u) => u.key)));
+  if (!before) return;
+  // The most valuable medal first: it's the one the notice shows.
+  const rank = { bronze: 0, silver: 1, gold: 2, platinum: 3 };
+  const fresh = a.unlocked.filter((u) => !before.has(u.key)).sort((x, y) => rank[y.tier.medal] - rank[x.tier.medal] || y.tier.i - x.tier.i);
+  if (!fresh.length) return;
+  const u = fresh[0];
+  const who = email === S.me.email ? '' : `${member(email)?.name.split(' ')[0] || ''}: `;
+  toast(fresh.length === 1 ? `${who}${t('ach.toast', { name: tierName(u.family, u.tier) })}` : `${who}${t('ach.toastMany', { n: fresh.length })}`, {
+    media: medalOf(u.family, u.tier, { size: 34 }), action: t('ach.see'), duration: 7000,
+    onAction: () => openAchievements(email, fresh.length === 1 ? u.family.cat : 'all', fresh.length === 1 ? u.family.id : null),
+  });
+}
+
+function profileAchievements(email) {
+  const a = achOf(email);
+  return `<div class="card ach-card">
+    <h3>${icon('trophy')} ${t('ach.title')} <span class="ach-count">${t('ach.of', { n: fmtN(a.done), total: fmtN(a.total) })}</span>
+      <button class="btn ghost sm" data-action="achievements" data-e="${esc(email)}">${t('ach.seeAll')}</button></h3>
+    ${a.unlocked.length ? `<div class="medal-strip">${a.unlocked.slice(0, 8).map((u) => medalTile(u, email)).join('')}</div>` : `<p class="muted">${t('ach.noneOther')}</p>`}
+  </div>`;
 }
 
 // ---------- Full-screen sheets: exercise picker and set logger ----------
@@ -1114,6 +1306,11 @@ window.addEventListener('popstate', () => {
     nav.fromPop = true;
     $modal.close();
     nav.fromPop = false;
+  } else if (S.sheet?.back && nav.sheet) {
+    // Achievements opened over another sheet: back returns to it.
+    S.sheet = S.sheet.back;
+    renderSheet();
+    navPush({ sheet: true });
   } else if (S.sheet && nav.sheet) {
     nav.sheet = false;
     S.sheet = null;
@@ -1145,6 +1342,7 @@ function openSheet(sheet) {
   renderSheet();
 }
 function closeSheet() {
+  if (S.sheet?.back) { S.sheet = S.sheet.back; renderSheet(); return; }
   S.sheet = null;
   renderSheet();
   render();
@@ -1156,11 +1354,15 @@ function renderSheet() {
   if (S.sheetChart) { S.sheetChart.destroy(); S.sheetChart = null; }
   if (!S.sheet) { $sheet.className = ''; $sheet.innerHTML = ''; return; }
   $sheet.className = 'open';
-  const html = S.sheet.kind === 'picker' ? pickerSheet() : exerciseSheet();
+  const html = S.sheet.kind === 'picker' ? pickerSheet() : S.sheet.kind === 'achievements' ? achievementsSheet() : exerciseSheet();
   // Re-renders swap the panel's contents only, so the slide-in animation plays once when it opens.
   const panel = $sheet.querySelector('.sheet-panel');
-  if (panel) panel.innerHTML = html;
-  else $sheet.innerHTML = `<div class="sheet-panel" role="dialog" aria-modal="true">${html}</div>`;
+  if (panel) {
+    panel.innerHTML = html;
+    if (panel.dataset.kind !== S.sheet.kind) panel.scrollTop = 0;
+    panel.dataset.kind = S.sheet.kind;
+  }
+  else $sheet.innerHTML = `<div class="sheet-panel" role="dialog" aria-modal="true" data-kind="${S.sheet.kind}">${html}</div>`;
   if (S.sheet.kind === 'exercise' && S.sheet.view === 'records') mountSheetChart();
   if (S.sheet.kind === 'picker') {
     const q = document.getElementById('picker-q');
@@ -1281,6 +1483,8 @@ function defaultsFor(name) {
 function openExercise(name) {
   const d = defaultsFor(name);
   openSheet({ kind: 'exercise', name, view: 'log', edit: null, w: d.w, r: d.r });
+  const who = target();
+  setTimeout(() => S.group && achBaseline(who), 300);
 }
 
 function exerciseSheet() {
@@ -1416,6 +1620,7 @@ function saveSet() {
   if (!reps || reps < 1) { toast(t('ex.needReps'), { error: true }); document.getElementById('in-r')?.focus(); return; }
   const gid = S.group.id;
   const who = target();
+  achBaseline(who);
   if (sh.edit) {
     const old = S.group.entries.find((e) => e.id === sh.edit && e.email === who);
     if (old) {
@@ -1436,6 +1641,8 @@ function saveSet() {
   // Expired session: renew it using this click (Google's popup needs a user gesture).
   if (S.store.kind === 'google' && !G.tokenValid()) G.signIn().then(() => S.outbox.flush(), () => {});
   renderSheet();
+  // After the PR notice, if any.
+  setTimeout(() => S.group?.id === gid && checkUnlocks(who), 1200);
 }
 
 // ---------- modals ----------
@@ -1800,6 +2007,14 @@ const actions = {
   },
   'install-dismiss': () => { ls.set(INSTALL_KEY, String(Date.now())); render(); },
   'close-sheet': closeSheet,
+  achievements: (el) => openAchievements(el.dataset.e || S.me.email, el.dataset.cat || 'all', el.dataset.open || null),
+  'ach-cat': (el) => { S.sheet.cat = el.dataset.cat; S.sheet.open = null; renderSheet(); },
+  'ach-open': (el) => {
+    S.sheet.open = S.sheet.open === el.dataset.id ? null : el.dataset.id;
+    renderSheet();
+    document.getElementById(`ach-${S.sheet.open}`)?.scrollIntoView({ block: 'nearest' });
+  },
+  'go-challenges': () => { S.groupTab = 'challenges'; setTab('group'); },
   'picker-cat': (el) => { S.sheet.cat = el.dataset.cat; refreshPicker(); },
   pick: (el) => {
     const d = defaultsFor(el.dataset.name);

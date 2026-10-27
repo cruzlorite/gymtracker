@@ -6,7 +6,8 @@ Log your workouts set by set, rest with the built-in timer and compete with your
 
 ## Features
 
-- **Home**: today's workout at a glance, this week, streak, monthly sessions, weekly volume, sets per muscle group, latest records and what the rest of the group did.
+- **Home**: today's workout at a glance, this week, streak, monthly sessions, weekly volume, 30-day improvement, records this month, latest achievements and the closest ones to unlock, live challenges with your position, sets per muscle group, latest records and what the rest of the group did.
+- **Achievements**: 365 of them in tiered families (gym days, week streaks, weights per lift with low starting tiers so everyone has steps to climb, records, total kilos compared to a piano, an elephant or the Eiffel Tower, variety, special days, group wins). Each one has its own medal, drawn in code: shape and ribbon by category, bronze, silver, gold or platinum by tier. They're computed from the logged sets (nothing extra is stored), a notice pops up when you unlock one, and every profile shows its medals.
 - **Set-by-set logging**: big − and + buttons for weight and reps, pre-filled from your last session. Each set is saved with one tap; tap a set to edit or delete it. Deleting a set or a whole exercise takes one tap and offers Undo.
 - **Rest timer**: starts automatically when you save a set, counts down the last 3 seconds and ends with a loud alarm and vibration (Android; iOS doesn't allow web vibration). Alarm volume and vibration level (off, light, medium, strong) are set in Settings, each with a Test button. Optional system notification when it ends while you're in another app. Keeps the screen awake while it runs.
 - **Exercise library**: about 295 exercises in 12 muscle groups (including machine-assisted ones, logged with the help as negative weight), named as gym-goers say them in each language, with forgiving search (any word order, partial words, small typos, aliases like RDL, OHP, Gironda or Scott, and muscle groups: "curl biceps", "abs") and a recent section. Each group can add its own exercises.
@@ -61,6 +62,8 @@ js/icons.js           SVG icons
 js/google.js          sign-in, Drive, Sheets and Picker (SheetStore)
 js/demo.js            DemoStore: same interface as SheetStore, in memory
 js/stats.js           pure calculations (attendance, volume, 1RM, streaks, records, challenges)
+js/achievements.js    achievement families, tiers and their evaluation from the logged sets
+js/medals.js          procedural SVG medal for each achievement
 vendor/               Chart.js served from the repo (hash verified in vendor/README.md)
 ```
 

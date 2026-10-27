@@ -494,7 +494,9 @@ body:has(#restbar.show) .fab { bottom: calc(var(--nav-h) + var(--safe-b) + 92px)
 .today-card .muted { margin-top: 4px; }
 .today-card.done { background: var(--accent-soft); border-color: transparent; }
 .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
-.home-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.home-tiles { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.tile strong.up { color: var(--up); }
+.tile strong.down { color: var(--down); }
 .week-dots { display: flex; gap: 4px; margin: 4px 0 2px; }
 .week-dots i { display: grid; place-items: center; flex: 1; max-width: 26px; aspect-ratio: 1; border-radius: 50%; background: var(--surface-2); color: var(--muted); font-style: normal; font-size: 10.5px; font-weight: 700; }
 .week-dots i.on { background: var(--accent); color: var(--accent-ink); }
@@ -513,7 +515,65 @@ body:has(#restbar.show) .fab { bottom: calc(var(--nav-h) + var(--safe-b) + 92px)
 .activity li { display: flex; align-items: center; gap: 10px; }
 .activity li > div { flex: 1; min-width: 0; display: grid; }
 .activity li .muted { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 1100px) { .home-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 760px) { .home-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.home-ch { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.link-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 8px 0; background: none; border: 0; text-align: left; color: inherit; }
+.home-ch-main { flex: 1; min-width: 0; display: grid; }
+.home-ch-main strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-ch-main .muted { font-size: 13px; }
+
+/* ============ Achievements ============ */
+.medal { display: block; flex: none; overflow: visible; filter: drop-shadow(0 2px 3px rgb(16 16 20 / .18)); }
+.medal.locked { filter: none; opacity: .75; }
+.ach-card { margin-bottom: 14px; }
+.ach-card > h3 { flex-wrap: wrap; }
+.ach-count { font-size: 13px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ach-card > h3 .btn { margin-left: auto; }
+.medal-strip { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 -6px; padding: 2px 6px 4px; }
+.medal-strip::-webkit-scrollbar { display: none; }
+.medal-tile { flex: 0 0 92px; display: grid; justify-items: center; gap: 2px; padding: 8px 4px; border: 0; border-radius: 12px; background: none; color: inherit; text-align: center; }
+.medal-tile:hover { background: var(--surface-2); }
+.medal-name { font-size: 12.5px; font-weight: 650; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-top: 4px; }
+.medal-date { font-size: 11.5px; color: var(--muted); }
+.ach-sub { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 14px 0 6px; }
+.ach-next-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.ach-next { display: flex; align-items: center; gap: 12px; width: 100%; padding: 6px 0; background: none; border: 0; color: inherit; text-align: left; }
+.ach-next-text { flex: 1; min-width: 0; display: grid; }
+.ach-next-text strong, .ach-next-text .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ach-next-text .muted { font-size: 13px; }
+.ach-next-prog { flex: 0 0 min(38%, 160px); display: grid; gap: 4px; justify-items: end; }
+.ach-next-prog em { font-style: normal; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ach-next-prog .bar, .ach-fam .bar, .ach-summary .bar { display: block; width: 100%; height: 6px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.ach-next-prog .bar i, .ach-fam .bar i, .ach-summary .bar i { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.ach-summary { display: grid; gap: 10px; margin: 2px 0 14px; }
+.ach-summary .bar { height: 8px; }
+.ach-metals { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.metal-count { display: inline-flex; align-items: center; gap: 6px; }
+.metal-count i { width: 10px; height: 10px; border-radius: 50%; }
+.metal-count.bronze i { background: #C77B45; }
+.metal-count.silver i { background: #A9B2BC; }
+.metal-count.gold i { background: #F2C232; }
+.metal-count.platinum i { background: #9CCBE6; }
+.sheet-body .cats { margin: 0 -16px 6px; }
+.ach-list .list-head { margin-top: 14px; }
+.ach-fam { border-bottom: 1px solid var(--line); scroll-margin-top: calc(var(--safe-t) + 72px); }
+.ach-fam-head { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 0; background: none; border: 0; color: inherit; text-align: left; }
+.ach-fam-text { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.ach-fam-text .muted { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ach-fam .bar { height: 5px; margin-top: 2px; }
+.ach-fam.none .ach-fam-text strong { color: var(--muted); }
+.ach-chev { color: var(--muted); transition: transform .15s; }
+.ach-chev .ic { width: 18px; height: 18px; }
+.ach-fam.open .ach-chev { transform: rotate(180deg); }
+.ach-fam > .fine { margin: -2px 0 8px; }
+.ach-tiers { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; padding: 2px 0 14px; }
+.ach-tier { display: grid; justify-items: center; align-content: start; gap: 2px; text-align: center; padding: 8px 4px; border-radius: 12px; background: var(--surface-2); }
+.ach-tier.got { background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+.ach-tier strong { font-size: 12.5px; line-height: 1.2; margin-top: 4px; }
+.ach-tier .muted { font-size: 11.5px; line-height: 1.2; }
+.ach-tier em { font-style: normal; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+#toast .medal { filter: none; }
 
 /* Logging for another member */
 .log-for { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
