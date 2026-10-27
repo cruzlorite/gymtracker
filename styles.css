@@ -275,6 +275,10 @@ form { display: grid; gap: 16px; }
 /* ============ View headers ============ */
 .view-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 4px 0 16px; }
 .view-head h1 { font-size: 26px; font-weight: 750; letter-spacing: -.025em; margin-right: auto; }
+/* Group header: long names shrink instead of pushing the buttons onto another line. */
+.view-head:has(.group-title) { flex-wrap: nowrap; }
+.view-head .group-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.head-actions { display: flex; align-items: center; gap: 4px; flex: none; }
 .view-head .select-wrap { max-width: 100%; }
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 16px; }
 .summary { color: var(--muted); margin: -4px 0 16px; }
@@ -531,6 +535,19 @@ body:has(#restbar.show) .fab { bottom: calc(var(--nav-h) + var(--safe-b) + 92px)
 .for-chip span:not(.av) { max-width: 6.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (pointer: coarse) { .for-chip { height: 44px; } }
 
+/* Progress: what you're looking at (opens the exercise search) */
+.sel-btn {
+  display: inline-flex; align-items: center; gap: 8px; max-width: 100%; height: 44px; padding: 0 12px 0 14px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--surface); font-weight: 650;
+}
+.sel-btn > span:not(.cat-dot) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sel-btn .ic { width: 18px; height: 18px; color: var(--muted); flex: none; }
+.pick-row.agg { background: var(--accent-soft); margin-bottom: 4px; }
+.pick-row.agg .pick-name { font-weight: 700; }
+.agg-ic { display: grid; place-items: center; color: var(--accent-text); }
+.agg-ic .ic { width: 16px; height: 16px; }
+.pick-row:has(.agg-ic) { grid-template-columns: 16px minmax(0, 1fr); }
+
 /* Invite: share buttons */
 .share-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 
@@ -702,6 +719,16 @@ body.sheet-open .restbar, body:not(:has(.has-nav)) .restbar { bottom: calc(var(-
 .winner .ic { color: var(--gold); }
 
 .people { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 14px; scrollbar-width: thin; }
+/* Group → Members: a grid of member cards instead of a scrolling row of chips. */
+.member-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.member-card {
+  display: grid; justify-items: center; gap: 6px; padding: 14px 8px 12px; min-width: 0; text-align: center;
+  border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); transition: border-color .15s, box-shadow .15s;
+}
+.member-card:hover { border-color: var(--faint); }
+.member-card.on { border-color: var(--accent-text); box-shadow: 0 0 0 2px var(--accent-soft); background: var(--accent-soft); }
+.member-card-name { max-width: 100%; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.member-card-meta { font-size: 12px; color: var(--muted); }
 .person {
   display: inline-flex; align-items: center; gap: 8px; height: 42px; padding: 0 14px 0 6px; flex: none;
   border: 1px solid var(--line); border-radius: 999px; background: var(--surface); font-weight: 600;

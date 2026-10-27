@@ -216,3 +216,50 @@ export function exerciseSummary(entries, exercise) {
     sets: es.reduce((a, e) => a + (+e.sets || 1), 0),
   };
 }
+
+// ---------- progress over a set of exercises (one, a muscle group or all) ----------
+
+/**
+ * Improvement curve in %: for each training day, the average over exercises of how much the best
+ * estimated 1RM so far beats that exercise's first day in the range. Only exercises with at least two
+ * days in the range count (as in `improvement`), so it's fair between people of different levels.
+ */
+export function improvementSeries(entries, r, keep = () => true) {
+  const byEx = new Map();
+  for (const e of entries) {
+    if (!e.exercise || !inRange(e, r) || !keep(e)) continue;
+    if (!byEx.has(e.exercise)) byEx.set(e.exercise, []);
+    byEx.get(e.exercise).push(e);
+  }
+  const series = [];
+  for (const [ex, es] of byEx) {
+    const days = bestByDate(es, ex).filter((p) => p.value > 0);
+    if (days.length >= 2) series.push(days);
+  }
+  const dates = [...new Set(series.flatMap((s) => s.map((p) => p.date)))].sort();
+  return dates.map((date) => {
+    const pcts = [];
+    for (const s of series) {
+      if (s[0].date > date) continue; // not started yet
+      const later = s.filter((p) => p.date > s[0].date && p.date <= date);
+      pcts.push(later.length ? Math.max(...later.map((p) => p.value)) / s[0].value - 1 : 0);
+    }
+    return { date, value: pcts.length ? (pcts.reduce((a, b) => a + b, 0) / pcts.length) * 100 : 0 };
+  });
+}
+
+/** Weekly totals (Monday-based) of volume or sets for the entries that pass `keep`. */
+export function weeklySeries(entries, r, metric, keep = () => true) {
+  const scoped = entries.filter((e) => e.exercise && inRange(e, r) && keep(e));
+  if (!scoped.length) return [];
+  const first = weekStart(r.from > '0000-01-01' ? r.from : scoped.reduce((a, e) => (e.date < a ? e.date : a), scoped[0].date));
+  const totals = new Map();
+  for (const e of scoped) {
+    const w = weekStart(e.date);
+    const v = metric === 'sets' ? (+e.sets || 1) : (+e.sets || 1) * (+e.reps || 0) * Math.max(0, +e.weight || 0);
+    totals.set(w, (totals.get(w) || 0) + v);
+  }
+  const out = [];
+  for (let w = first; w <= r.to; w = addDays(w, 7)) out.push({ date: w, value: totals.get(w) || 0 });
+  return out;
+}

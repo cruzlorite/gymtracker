@@ -34,7 +34,7 @@ const params = new URLSearchParams(location.search);
 const S = {
   store: null, me: null, groups: [], group: null, outbox: null,
   tab: 'home', groupTab: 'ranking', logFor: '',
-  day: St.todayISO(), period: '30', month: St.todayISO().slice(0, 7), exercise: '', metric: 'e1rm', compare: true, profile: '',
+  day: St.todayISO(), period: '30', month: St.todayISO().slice(0, 7), sel: { kind: 'all' }, metric: 'improvement', compare: true, profile: '',
   sheet: null, // { kind: 'picker', q, cat } | { kind: 'exercise', name, view, edit, w, r }
   pendingGroup: params.get('group'), needsPicker: null, chart: null, loadedAt: 0,
 };
@@ -697,25 +697,51 @@ function viewHistory() {
 }
 
 // ---------- Progress ----------
-/** Exercises with data, most logged first. */
-function exerciseOptions(entries) {
-  const freq = new Map();
-  for (const e of entries) if (e.exercise) freq.set(e.exercise, (freq.get(e.exercise) || 0) + 1);
-  return [...freq].sort((a, b) => b[1] - a[1]).map(([ex]) => ex);
+// What Progress shows: every exercise together, one muscle group, or one exercise.
+// { kind: 'all' } | { kind: 'cat', id } | { kind: 'ex', name }
+
+/** Which entries belong to the selection. */
+const selKeep = (sel) => (sel.kind === 'all' ? (e) => Boolean(e.exercise)
+  : sel.kind === 'cat' ? (e) => Boolean(e.exercise) && Ex.exerciseInfo(e.exercise).cat === sel.id
+    : (e) => e.exercise === sel.name);
+const selCat = (sel) => (sel.kind === 'cat' ? Ex.CATEGORIES.find((c) => c.id === sel.id) : sel.kind === 'ex' ? Ex.categoryOf(sel.name) : null);
+const selLabel = (sel) => (sel.kind === 'all' ? t('progress.allExercises')
+  : sel.kind === 'cat' ? t('progress.allOf', { group: Ex.catLabel(selCat(sel)) }) : Ex.exName(sel.name));
+/** Several exercises can only be added up as improvement (%), volume or sets; one exercise has more. */
+const selMetrics = (sel) => (sel.kind !== 'ex' ? ['improvement', 'volume', 'sets']
+  : !hasWeight(sel.name) ? ['reps'] : isAssisted(sel.name) ? ['weight', 'reps'] : ['improvement', ...St.METRICS]);
+const selMetric = (sel) => (selMetrics(sel).includes(S.metric) ? S.metric : selMetrics(sel)[0]);
+/** Weekly totals for groups of exercises; daily values for one exercise. */
+const isWeekly = (sel, metric) => sel.kind !== 'ex' && (metric === 'volume' || metric === 'sets');
+/** The selection is kept only while it still has data in the open group. */
+function currentSel() {
+  const sel = S.sel || { kind: 'all' };
+  if (!S.group.entries.some(selKeep(sel))) S.sel = { kind: 'all' };
+  return S.sel || { kind: 'all' };
 }
-const hasWeight = (name) => S.group.entries.some((e) => e.exercise === name && e.weight !== 0);
-/** Metrics that make sense: bodyweight → reps only; assisted → help (max weight) and reps; else all. */
-const metricsFor = (name) => (!hasWeight(name) ? ['reps'] : isAssisted(name) ? ['weight', 'reps'] : St.METRICS);
-/** Bodyweight-only exercises can only be charted by reps. */
-const metricFor = (name) => (metricsFor(name).includes(S.metric) ? S.metric : metricsFor(name)[0]);
-const fmtMetric = (metric, v, d = 1) => (metric === 'reps' ? t('unit.reps', { n: fmtN(v) }) : metric === 'volume' ? fmtKg(v) : `${fmtN(v, d)} kg`);
+
+/** One member's series for the chart. */
+function progressSeries(entries, sel, metric, r) {
+  if (metric === 'improvement') return St.improvementSeries(entries, r, selKeep(sel));
+  if (isWeekly(sel, metric)) return St.weeklySeries(entries, r, metric, selKeep(sel));
+  return St.dailySeries(entries.filter((e) => e.date >= r.from && e.date <= r.to), sel.name, metric).filter((p) => p.value !== 0);
+}
 
 function periodChips() {
   return `<div class="seg" role="group" aria-label="${t('period.label')}">${St.PERIODS.map((k) =>
     `<button class="${S.period === k ? 'on' : ''}" data-action="period" data-p="${k}">${t(`period.${k}`)}</button>`).join('')}</div>`;
 }
 
-function metricChips(name, current = metricFor(name), action = 'metric') {
+const hasWeight = (name) => S.group.entries.some((e) => e.exercise === name && e.weight !== 0);
+/** Metrics that make sense: bodyweight → reps only; assisted → help (max weight) and reps; else all. */
+const metricsFor = (name) => (!hasWeight(name) ? ['reps'] : isAssisted(name) ? ['weight', 'reps'] : St.METRICS);
+const fmtMetric = (metric, v, d = 1) => (metric === 'reps' ? t('unit.reps', { n: fmtN(v) })
+  : metric === 'volume' ? fmtKg(v)
+    : metric === 'sets' ? t('unit.sets', { n: fmtN(v) })
+      : metric === 'improvement' ? `${v > 0 ? '+' : ''}${fmtN(v, d)} %`
+        : `${fmtN(v, d)} kg`);
+
+function metricChips(name, current, action) {
   const ok = metricsFor(name);
   return `<div class="seg" role="group" aria-label="${t('metric.label')}">${St.METRICS.map((k) =>
     `<button class="${current === k ? 'on' : ''}" data-action="${action}" data-m="${k}" ${ok.includes(k) ? '' : 'disabled'}>${t(isAssisted(name) && k === 'weight' ? 'metric.assist' : `metric.${k}`)}</button>`).join('')}</div>`;
@@ -751,66 +777,68 @@ function recordsBlock(name, entries = mine()) {
 }
 
 function viewProgress() {
-  const exs = exerciseOptions(S.group.entries);
-  if (!exs.length) return `<div class="view-head"><h1>${t('nav.progress')}</h1></div>${emptyState('chart', t('progress.emptyTitle'), t('progress.emptyText'))}`;
-  if (!exs.includes(S.exercise)) S.exercise = exerciseOptions(mine())[0] || exs[0];
-  const weighted = hasWeight(S.exercise);
-  const metric = metricFor(S.exercise);
+  if (!S.group.entries.some((e) => e.exercise)) return `<div class="view-head"><h1>${t('nav.progress')}</h1></div>${emptyState('chart', t('progress.emptyTitle'), t('progress.emptyText'))}`;
+  const sel = currentSel();
+  const metric = selMetric(sel);
+  const keep = selKeep(sel);
   const r = St.periodRange(S.period);
-  const rows = members().map((m) => ({ m, imp: St.improvement(entriesOf(m.email), r, S.exercise).details[0] }));
-  const myPrs = St.prs(mine()).filter((p) => p.e1rm > 0).sort((a, b) => b.e1rm - a.e1rm);
+  const cat = selCat(sel);
+  const rows = members().map((m) => ({ m, imp: St.improvement(entriesOf(m.email).filter(keep), r) }));
+  const myPrs = St.prs(mine().filter(keep)).filter((p) => p.e1rm > 0).sort((a, b) => b.e1rm - a.e1rm).slice(0, 12);
+  const helpKey = isWeekly(sel, metric) ? `metric.${metric}Week.help` : `metric.${metric}.help`;
   return `<div class="view-head">
       <h1>${t('nav.progress')}</h1>
-      <div class="select-wrap"><select data-change="exercise" aria-label="${t('progress.exercise')}">${exs.map((ex) =>
-        `<option value="${esc(ex)}" ${ex === S.exercise ? 'selected' : ''}>${esc(Ex.exName(ex))}</option>`).join('')}</select>${icon('down')}</div>
+      <button class="sel-btn" data-action="progress-pick">${cat ? `<span class="cat-dot" style="--c:${cat.color}"></span>` : icon('chart')}<span>${esc(selLabel(sel))}</span>${icon('down')}</button>
     </div>
-    <div class="toolbar">${metricChips(S.exercise)}</div>
+    <div class="toolbar"><div class="seg" role="group" aria-label="${t('metric.label')}">${selMetrics(sel).map((k) =>
+      `<button class="${metric === k ? 'on' : ''}" data-action="metric" data-m="${k}">${t(sel.kind === 'ex' && isAssisted(sel.name) && k === 'weight' ? 'metric.assist' : `metric.${k}`)}</button>`).join('')}</div></div>
     <div class="toolbar">${periodChips()}
       ${solo() ? '' : `<label class="switch-label"><span>${t('progress.compare')}</span><span class="switch"><input type="checkbox" data-change="compare" ${S.compare ? 'checked' : ''}><i></i></span></label>`}
     </div>
     <div class="card chart-card"><div class="chart-box"><canvas id="chart" aria-label="${t(`metric.${metric}`)}"></canvas></div>
-      <p class="fine">${t(`metric.${metric}.help`)}</p></div>
-    <section class="card records-card">
-      <h3>${icon('trophy')} ${t('records.mine', { name: esc(Ex.exName(S.exercise)) })}</h3>
-      ${recordsBlock(S.exercise)}
-    </section>
+      <p class="fine">${t(helpKey)}</p></div>
+    ${sel.kind === 'ex' ? `<section class="card records-card">
+      <h3>${icon('trophy')} ${t('records.mine', { name: esc(Ex.exName(sel.name)) })}</h3>
+      ${recordsBlock(sel.name)}
+    </section>` : ''}
     <div class="grid two">
-      ${weighted && !solo() ? `<div class="card">
+      ${!solo() && (sel.kind !== 'ex' || selMetrics(sel).includes('improvement')) ? `<div class="card">
         <h3>${t('progress.improvement')}</h3>
-        <p class="muted card-sub">${t('progress.improvementSub')}</p>
+        <p class="muted card-sub">${sel.kind === 'ex' ? t('progress.improvementSub') : t('progress.improvementAggSub')}</p>
         <table class="table">
-          <thead><tr><th>${t('progress.person')}</th><th class="r">${t('progress.start')}</th><th class="r">${t('progress.best')}</th><th class="r">${t('progress.change')}</th></tr></thead>
-          <tbody>${rows.sort((a, b) => (b.imp?.pct ?? -9) - (a.imp?.pct ?? -9)).map(({ m, imp }) => `<tr class="${m.email === S.me.email ? 'me' : ''}">
-            <td><span class="who">${avatar(m)} ${esc(m.name)}</span></td>
-            ${imp ? `<td class="r">${fmtN(imp.base, 1)}</td><td class="r">${fmtN(imp.peak, 1)}</td><td class="r ${imp.pct >= 0 ? 'up' : 'down'}">${fmtPct(imp.pct)}</td>`
-              : `<td class="r muted" colspan="3">${t('progress.needTwo')}</td>`}
-          </tr>`).join('')}</tbody>
+          <thead><tr><th>${t('progress.person')}</th>${sel.kind === 'ex'
+            ? `<th class="r">${t('progress.start')}</th><th class="r">${t('progress.best')}</th>`
+            : `<th class="r">${t('progress.exercisesCount')}</th>`}<th class="r">${t('progress.change')}</th></tr></thead>
+          <tbody>${rows.sort((a, b) => (b.imp.score ?? -9) - (a.imp.score ?? -9)).map(({ m, imp }) => {
+            const d = imp.details[0];
+            const cells = imp.score == null ? `<td class="r muted" colspan="${sel.kind === 'ex' ? 3 : 2}">${t('progress.needTwo')}</td>`
+              : `${sel.kind === 'ex' ? `<td class="r">${fmtN(d.base, 1)}</td><td class="r">${fmtN(d.peak, 1)}</td>` : `<td class="r">${fmtN(imp.details.length)}</td>`}
+                <td class="r ${imp.score >= 0 ? 'up' : 'down'}">${fmtPct(imp.score)}</td>`;
+            return `<tr class="${m.email === S.me.email ? 'me' : ''}"><td><span class="who">${avatar(m)} ${esc(m.name)}</span></td>${cells}</tr>`;
+          }).join('')}</tbody>
         </table>
       </div>` : ''}
-      <div class="card">
-        <h3>${icon('trophy')} ${t('progress.myRecords')}</h3>
+      ${sel.kind !== 'ex' ? `<div class="card">
+        <h3>${icon('trophy')} ${t('records.mine', { name: esc(selLabel(sel)) })}</h3>
         ${myPrs.length ? `<table class="table"><thead><tr><th>${t('progress.exercise')}</th><th class="r">${t('progress.bestSet')}</th><th class="r">${t('progress.e1rm')}</th></tr></thead>
           <tbody>${myPrs.map((p) => `<tr><td><button class="link" data-action="progress-ex" data-name="${esc(p.exercise)}">${esc(Ex.exName(p.exercise))}</button></td>
             <td class="r">${fmtW(p.best.weight)} × ${fmtN(p.best.reps)}</td><td class="r"><strong>${fmtN(p.e1rm, 1)} kg</strong></td></tr>`).join('')}</tbody></table>`
           : `<p class="muted">${t('progress.noRecords')}</p>`}
-      </div>
+      </div>` : ''}
     </div>`;
 }
 
 function mountChart() {
   const canvas = document.getElementById('chart');
   if (!canvas || !window.Chart) return;
-  const css = getComputedStyle(document.documentElement);
-  const text = css.getPropertyValue('--muted').trim();
-  const grid = css.getPropertyValue('--line').trim();
-  const accent = css.getPropertyValue('--accent-text').trim();
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent-text').trim();
   const r = St.periodRange(S.period);
-  const metric = metricFor(S.exercise);
+  const sel = currentSel();
+  const metric = selMetric(sel);
   const compare = S.compare && !solo();
   const who = compare ? members() : members().filter((m) => m.email === S.me.email);
   const datasets = who.map((m) => {
-    const data = St.dailySeries(entriesOf(m.email).filter((e) => e.date >= r.from && e.date <= r.to), S.exercise, metric)
-      .filter((p) => p.value !== 0)
+    const data = progressSeries(entriesOf(m.email), sel, metric, r)
       .map((p) => ({ x: +St.parseISO(p.date), y: Math.round(p.value * 10) / 10 }));
     const me = m.email === S.me.email;
     const color = me && !compare ? accent : m.color;
@@ -819,11 +847,11 @@ function mountChart() {
       pointRadius: 2.5, pointHoverRadius: 5, borderWidth: me ? 3 : 2,
     };
   }).filter((d) => d.data.length);
-  S.chart = drawChart(canvas, datasets, metric, compare);
+  S.chart = drawChart(canvas, datasets, metric, compare, isWeekly(sel, metric));
 }
 
 /** A line chart over time for one metric, styled from the current theme. */
-function drawChart(canvas, datasets, metric, legend) {
+function drawChart(canvas, datasets, metric, legend, weekly = false) {
   const css = getComputedStyle(document.documentElement);
   const text = css.getPropertyValue('--muted').trim();
   const grid = css.getPropertyValue('--line').trim();
@@ -840,7 +868,8 @@ function drawChart(canvas, datasets, metric, legend) {
       plugins: {
         legend: { display: legend, labels: { color: text, usePointStyle: true, boxWidth: 8 } },
         tooltip: { callbacks: {
-          title: (items) => cap(df({ weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(items[0].parsed.x))),
+          title: (items) => (weekly ? t('progress.weekOf', { date: df({ day: 'numeric', month: 'long' }).format(new Date(items[0].parsed.x)) })
+            : cap(df({ weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(items[0].parsed.x)))),
           label: (it) => ` ${it.dataset.label}: ${fmtMetric(metric, it.parsed.y)}`,
         } },
       },
@@ -922,9 +951,11 @@ function board(title, sub, rows, get, fmt, { note = '', allowNeg = false } = {})
 function viewGroup() {
   const tabs = ['ranking', 'challenges', 'members'];
   const head = `<div class="view-head">
-      <h1>${esc(S.group.name)}</h1>
-      <button class="btn ghost" data-action="invite">${icon('userPlus')} ${t('group.invite')}</button>
-      <button class="icon-btn" data-action="group-settings" aria-label="${t('gs.title')}">${icon('settings')}</button>
+      <h1 class="group-title">${esc(S.group.name)}</h1>
+      <div class="head-actions">
+        <button class="btn ghost" data-action="invite">${icon('userPlus')} ${t('group.invite')}</button>
+        <button class="icon-btn" data-action="group-settings" aria-label="${t('gs.title')}">${icon('settings')}</button>
+      </div>
     </div>
     <div class="seg wide" role="tablist">${tabs.map((k) => `<button role="tab" class="${S.groupTab === k ? 'on' : ''}" aria-selected="${S.groupTab === k}" data-action="group-tab" data-v="${k}">${t(`group.${k}`)}</button>`).join('')}</div>`;
   if (S.groupTab === 'challenges') return head + viewChallenges();
@@ -1015,13 +1046,24 @@ function sessionList(es) {
   }).join('')}</ul>`;
 }
 
+/** First name, with "(you)" on your own card unless your name already is "you" (demo). */
+function memberCardName(x) {
+  const first = x.name.split(' ')[0];
+  return x.email === S.me.email && first !== t('common.you') ? `${first} (${t('common.you')})` : first;
+}
+
 function viewMembers() {
   const m = member(S.profile) || member(S.me.email);
   const es = entriesOf(m.email);
   const dates = St.sessionDates(es);
   const imp = St.improvement(es, St.periodRange('90')).score;
   const prs = St.prs(es).filter((p) => p.e1rm > 0).sort((a, b) => b.e1rm - a.e1rm).slice(0, 8);
-  return `<div class="people">${members().map((x) => `<button class="person ${x.email === m.email ? 'on' : ''}" data-action="profile" data-e="${esc(x.email)}">${avatar(x)}<span>${esc(x.name)}</span></button>`).join('')}</div>
+  // Member cards: who's selected, plus how much each trained in the last 30 days.
+  const r30 = St.periodRange('30');
+  return `<div class="member-grid">${members().map((x) => `<button class="member-card ${x.email === m.email ? 'on' : ''}" data-action="profile" data-e="${esc(x.email)}" aria-pressed="${x.email === m.email}">
+      ${avatar(x, 'lg')}<span class="member-card-name">${esc(memberCardName(x))}</span>
+      <span class="member-card-meta">${t('members.last30days', { n: St.attendance(entriesOf(x.email), r30) })}</span>
+    </button>`).join('')}</div>
     <div class="profile-layout">
       <div>
         <div class="card profile-head">
@@ -1136,36 +1178,71 @@ function pickerSheet() {
   const sh = S.sheet;
   return `<header class="sheet-head">
       <button class="icon-btn" data-action="close-sheet" aria-label="${t('common.back')}">${icon('left')}</button>
-      <h2>${t('picker.title')}</h2>
-      <button class="btn ghost sm" data-action="new-ex">${icon('plus')} ${t('picker.new')}</button>
+      <h2>${sh.mode === 'select' ? t('progress.pickTitle') : t('picker.title')}</h2>
+      ${sh.mode === 'select' ? '' : `<button class="btn ghost sm" data-action="new-ex">${icon('plus')} ${t('picker.new')}</button>`}
     </header>
     <div class="search">${icon('search')}<input type="search" id="picker-q" value="${esc(sh.q)}" placeholder="${t('picker.search')}" autocomplete="off" enterkeyhint="go"></div>
     <div class="cats" id="picker-cats">${pickerCats()}</div>
     <div class="picker-list" id="picker-list">${pickerList()}</div>`;
 }
 
+/** Exercises the picker offers: the whole library, or (choosing for Progress) only those with data. */
+function pickerPool() {
+  const all = Ex.allExercises(usedNames());
+  if (S.sheet.mode !== 'select') return all;
+  const used = new Set(usedNames());
+  return all.filter((e) => used.has(e.name));
+}
+
 function pickerCats() {
   const cat = S.sheet.cat;
-  return [{ id: 'all', label: t('picker.all') }, ...Ex.CATEGORIES.map((c) => ({ id: c.id, label: Ex.catLabel(c), color: c.color }))]
+  // Only groups that have something to show (Cardio is empty until a custom exercise uses it).
+  const withItems = new Set(pickerPool().map((e) => e.cat));
+  return [{ id: 'all', label: t('picker.all') }, ...Ex.CATEGORIES.filter((c) => withItems.has(c.id)).map((c) => ({ id: c.id, label: Ex.catLabel(c), color: c.color }))]
     .map((c) => `<button class="chip ${cat === c.id ? 'on' : ''}" data-action="picker-cat" data-cat="${c.id}">${c.color ? `<span class="cat-dot" style="--c:${c.color}"></span>` : ''}${esc(c.label)}</button>`).join('');
 }
 
 function pickRow(e) {
   const cat = Ex.categoryOf(e.name);
   const info = lastInfo(e.name);
-  return `<button class="pick-row" data-action="pick" data-name="${esc(e.name)}">
+  const select = S.sheet.mode === 'select';
+  return `<button class="pick-row" data-action="${select ? 'pick-progress' : 'pick'}" ${select ? `data-sel="ex:${esc(e.name)}"` : `data-name="${esc(e.name)}"`}>
     <span class="cat-dot" style="--c:${cat.color}"></span>
     <span class="pick-name">${esc(Ex.exName(e.name))}</span>
     ${info ? `<span class="pick-meta">${esc(info)}</span>` : ''}
   </button>`;
 }
 
+/** Choosing for Progress: rows for every exercise together and for each muscle group. */
+function aggregateRow(id) {
+  const c = id === 'all' ? null : Ex.CATEGORIES.find((x) => x.id === id);
+  const n = new Set(S.group.entries.filter(selKeep(c ? { kind: 'cat', id } : { kind: 'all' })).map((e) => e.exercise)).size;
+  return `<button class="pick-row agg" data-action="pick-progress" data-sel="${c ? `cat:${id}` : 'all'}">
+    ${c ? `<span class="cat-dot" style="--c:${c.color}"></span>` : `<span class="agg-ic">${icon('chart')}</span>`}
+    <span class="pick-name">${esc(c ? t('progress.allOf', { group: Ex.catLabel(c) }) : t('progress.allExercises'))}</span>
+    <span class="pick-meta">${t('progress.aggMeta', { n })}</span>
+  </button>`;
+}
+
 function pickerList() {
   const { q: rawQ, cat } = S.sheet;
   const q = Ex.norm(rawQ || '');
-  const inCat = Ex.allExercises(usedNames()).filter((e) => cat === 'all' || e.cat === cat);
+  const inCat = pickerPool().filter((e) => cat === 'all' || e.cat === cat);
   const byName = (a, b) => Ex.exName(a.name).localeCompare(Ex.exName(b.name), locale());
   let html = '';
+  if (S.sheet.mode === 'select') {
+    const groups = Ex.CATEGORIES.filter((c) => inCat.some((e) => e.cat === c.id));
+    if (q) {
+      // Typing a muscle group ("biceps", "pierna") also offers its aggregate.
+      const aggs = groups.filter((c) => Ex.score({ name: c.en, es: c.es, tags: (c.words || '').split(',').map((w) => Ex.norm(w)).filter(Boolean) }, q) > 0);
+      const found = Ex.search(inCat, rawQ, (e) => Ex.exName(e.name));
+      return aggs.map((c) => aggregateRow(c.id)).join('') + found.map(pickRow).join('') || `<p class="muted pad">${t('picker.noResults')}</p>`;
+    }
+    html += aggregateRow(cat);
+    if (cat !== 'all') return html + inCat.sort(byName).map(pickRow).join('');
+    for (const c of groups) html += `<h3 class="list-head">${esc(Ex.catLabel(c))}</h3>${aggregateRow(c.id)}${inCat.filter((e) => e.cat === c.id).sort(byName).map(pickRow).join('')}`;
+    return html;
+  }
   if (q) {
     // Fuzzy, ranked: word order, partial words and small typos are fine ("banca press", "sentadila").
     const found = Ex.search(inCat, rawQ, (e) => Ex.exName(e.name));
@@ -1444,7 +1521,7 @@ function newExerciseModal(name = '') {
     <form data-form="new-ex">
       <label class="field"><span>${t('newEx.name')}</span><input name="name" required maxlength="60" value="${esc(name)}" placeholder="${t('newEx.placeholder')}" autofocus></label>
       <fieldset class="field"><legend>${t('newEx.category')}</legend>
-        <div class="chips">${Ex.CATEGORIES.map((c, i) => `<label class="chip radio"><input type="radio" name="cat" value="${c.id}" ${i === Ex.CATEGORIES.length - 1 ? 'checked' : ''}>
+        <div class="chips">${Ex.CATEGORIES.filter((c) => c.id !== 'cardio').map((c) => `<label class="chip radio"><input type="radio" name="cat" value="${c.id}" ${c.id === 'other' ? 'checked' : ''}>
           <span class="cat-dot" style="--c:${c.color}"></span>${esc(Ex.catLabel(c))}</label>`).join('')}</div>
       </fieldset>
       <p class="fine">${t('newEx.shared')}</p>
@@ -1684,7 +1761,17 @@ const actions = {
   'group-tab': (el) => { S.groupTab = el.dataset.v; render(); },
   period: (el) => { S.period = el.dataset.p; render(); },
   metric: (el) => { S.metric = el.dataset.m; render(); },
-  'progress-ex': (el) => { S.exercise = el.dataset.name; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); },
+  'progress-ex': (el) => { S.sel = { kind: 'ex', name: el.dataset.name }; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); },
+  'progress-pick': () => {
+    // Always starts on "All": starting filtered by the current group made searching other exercises fail.
+    openSheet({ kind: 'picker', q: '', cat: 'all', mode: 'select' });
+  },
+  'pick-progress': (el) => {
+    const v = el.dataset.sel;
+    S.sel = v === 'all' ? { kind: 'all' } : v.startsWith('cat:') ? { kind: 'cat', id: v.slice(4) } : { kind: 'ex', name: v.slice(3) };
+    closeSheet();
+    window.scrollTo({ top: 0 });
+  },
   month: (el) => { S.month = el.dataset.m; render(); },
   day: (el) => { S.day = el.dataset.d; render(); },
   profile: (el) => { S.profile = el.dataset.e; render(); },
@@ -1720,7 +1807,7 @@ const actions = {
   },
   'new-ex': (el) => newExerciseModal(el.dataset.name || S.sheet?.q || ''),
   'ex-view': (el) => { readSteppers(); S.sheet.view = el.dataset.v; renderSheet(); },
-  'ex-chart': () => { S.exercise = S.sheet.name; closeSheet(); setTab('progress'); },
+  'ex-chart': () => { S.sel = { kind: 'ex', name: S.sheet.name }; closeSheet(); setTab('progress'); },
   fill: (el) => {
     S.sheet.w = shownW(S.sheet.name, Number(el.dataset.w)); S.sheet.r = Number(el.dataset.r);
     document.getElementById('in-w').value = showNum(S.sheet.w);
@@ -2032,7 +2119,6 @@ document.addEventListener('input', (e) => {
 });
 document.addEventListener('change', (e) => {
   const el = e.target;
-  if (el.dataset?.change === 'exercise') { S.exercise = el.value; render(); }
   if (el.dataset?.change === 'compare') { S.compare = el.checked; render(); }
   if (el.dataset?.change === 'open-logging') {
     const open = el.checked;

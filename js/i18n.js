@@ -91,6 +91,13 @@ const es = {
 
   'period.label': 'Periodo', 'period.7': '7 días', 'period.30': '30 días', 'period.90': '90 días', 'period.365': '1 año', 'period.all': 'Todo',
   'progress.emptyTitle': 'Aún no hay progreso que mostrar', 'progress.emptyText': 'Cuando registréis ejercicios con peso, aquí veréis la evolución de cada uno.',
+  'progress.allExercises': 'Todos los ejercicios', 'progress.allOf': 'Todo {group}', 'progress.pickTitle': 'Ver progreso de…',
+  'progress.aggMeta': plural('{n} ejercicio', 'media de {n} ejercicios'), 'progress.weekOf': 'Semana del {date}', 'progress.exercisesCount': 'Ejercicios',
+  'progress.improvementAggSub': 'Media de la mejora del 1RM estimado de cada ejercicio',
+  'metric.improvement': 'Mejora', 'metric.sets': 'Series',
+  'metric.improvement.help': 'Cuánto ha subido el 1RM estimado respecto al primer día del periodo, en %. Con varios ejercicios es la media de todos, así que es justo entre gente de niveles distintos.',
+  'metric.volumeWeek.help': 'Kilos totales por semana (series × reps × kg) de los ejercicios elegidos.',
+  'metric.setsWeek.help': 'Series por semana de los ejercicios elegidos.',
   'progress.exercise': 'Ejercicio', 'progress.compare': 'Comparar con el grupo', 'progress.chartLabel': 'Evolución del 1RM estimado',
   'progress.e1rmHelp': '1RM estimado: el peso que podrías levantar a una repetición, calculado a partir de tus series (fórmula de Epley). Permite comparar series con distintas repeticiones.',
   'progress.improvement': 'Mejora en el periodo', 'progress.person': 'Persona', 'progress.start': 'Inicio', 'progress.best': 'Mejor', 'progress.change': 'Cambio',
@@ -166,7 +173,7 @@ const es = {
   'ch.delete': 'Borrar reto', 'ch.deleteTitle': '¿Borrar «{title}»?', 'ch.deleteText': 'El reto desaparece para todo el grupo. Los entrenos no se tocan.', 'ch.deleted': 'Reto borrado.',
 
   'members.noWorkouts': 'Sin entrenos todavía.', 'members.since': 'en el grupo desde {date}', 'members.totalDays': 'Días totales',
-  'members.last30': 'Últimos 30 días', 'members.improvement90': 'Mejora 90 días', 'members.recent': 'Últimos entrenos',
+  'members.last30': 'Últimos 30 días', 'members.last30days': plural('{n} día en 30 d', '{n} días en 30 d'), 'members.improvement90': 'Mejora 90 días', 'members.recent': 'Últimos entrenos',
 
   'picker.title': 'Añadir ejercicio', 'picker.new': 'Nuevo', 'picker.search': 'Buscar ejercicio', 'picker.all': 'Todos',
   'picker.create': 'Crear «{name}»', 'picker.noResults': 'No hay ejercicios con ese nombre.', 'picker.recent': 'Recientes',
@@ -300,6 +307,13 @@ const en = {
 
   'period.label': 'Period', 'period.7': '7 days', 'period.30': '30 days', 'period.90': '90 days', 'period.365': '1 year', 'period.all': 'All',
   'progress.emptyTitle': 'No progress to show yet', 'progress.emptyText': "Once you log exercises with weight, you'll see everyone's progress here.",
+  'progress.allExercises': 'All exercises', 'progress.allOf': 'All {group}', 'progress.pickTitle': 'Show progress for…',
+  'progress.aggMeta': plural('{n} exercise', 'average of {n} exercises'), 'progress.weekOf': 'Week of {date}', 'progress.exercisesCount': 'Exercises',
+  'progress.improvementAggSub': 'Average estimated-1RM improvement of each exercise',
+  'metric.improvement': 'Improvement', 'metric.sets': 'Sets',
+  'metric.improvement.help': 'How much the estimated 1RM has risen since the first day of the period, in %. With several exercises it is the average of all of them, so it is fair between people of different levels.',
+  'metric.volumeWeek.help': 'Total kilos per week (sets × reps × kg) of the chosen exercises.',
+  'metric.setsWeek.help': 'Sets per week of the chosen exercises.',
   'progress.exercise': 'Exercise', 'progress.compare': 'Compare with group', 'progress.chartLabel': 'Estimated 1RM over time',
   'progress.e1rmHelp': 'Estimated 1RM: the weight you could lift for one rep, calculated from your sets (Epley formula). It lets you compare sets with different rep counts.',
   'progress.improvement': 'Improvement in period', 'progress.person': 'Person', 'progress.start': 'Start', 'progress.best': 'Best', 'progress.change': 'Change',
@@ -375,7 +389,7 @@ const en = {
   'ch.delete': 'Delete challenge', 'ch.deleteTitle': 'Delete "{title}"?', 'ch.deleteText': 'The challenge disappears for the whole group. Workouts are not touched.', 'ch.deleted': 'Challenge deleted.',
 
   'members.noWorkouts': 'No workouts yet.', 'members.since': 'in the group since {date}', 'members.totalDays': 'Total days',
-  'members.last30': 'Last 30 days', 'members.improvement90': '90-day improvement', 'members.recent': 'Recent workouts',
+  'members.last30': 'Last 30 days', 'members.last30days': plural('{n} day in 30 d', '{n} days in 30 d'), 'members.improvement90': '90-day improvement', 'members.recent': 'Recent workouts',
 
   'picker.title': 'Add exercise', 'picker.new': 'New', 'picker.search': 'Search exercises', 'picker.all': 'All',
   'picker.create': 'Create "{name}"', 'picker.noResults': 'No exercises with that name.', 'picker.recent': 'Recent',
