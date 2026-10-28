@@ -15,6 +15,7 @@ Log your workouts set by set, rest with the built-in timer and compete with your
 - **Personal records** flagged with a trophy as you log them, plus per-exercise history, bests and a chart (estimated 1RM, max weight, volume or max reps).
 - **Progress**: pick all exercises, a muscle group or one exercise with the same search as the tracker. Groups chart improvement (average estimated-1RM gain, %), weekly volume or weekly sets; one exercise adds estimated 1RM, max weight and max reps. Opens on all exercises by improvement.
 - **Group**: attendance, improvement, streak and volume rankings; challenges (attendance, volume, improvement, sets, reps, max weight, records); profiles; a shared calendar; progress charts. The creator can rename or delete the group, see pending invitations and remove members. Groups can also be just for you: the group parts of the app hide until someone else joins.
+- **Share to Instagram, WhatsApp, TikTok…**: turn a workout, a record or an achievement into an image (story 9:16 or post 4:5, with or without your name), drawn on the phone and handed to the system share sheet; on desktop it downloads as PNG.
 - **Invites by WhatsApp or email**: after adding someone's email, send them the group link by WhatsApp, email or the phone's share sheet.
 - **Log for others**: pick a member in the Workout tab and log their sets (open mode, or always for the group creator).
 - **No lost sets**: every set shows up instantly and syncs to the sheet in the background. If you're offline or your Google session expires, it stays on the device and syncs once you're back.
@@ -64,6 +65,7 @@ js/demo.js            DemoStore: same interface as SheetStore, in memory
 js/stats.js           pure calculations (attendance, volume, 1RM, streaks, records, challenges)
 js/achievements.js    achievement families, tiers and their evaluation from the logged sets
 js/medals.js          procedural SVG medal for each achievement
+js/share.js           share images (workout, record, achievement) drawn on a canvas
 vendor/               Chart.js served from the repo (hash verified in vendor/README.md)
 ```
 

@@ -51,6 +51,8 @@ function compact(text) {
   if (!Number.isFinite(v) || v < 1e4) return text;
   return v >= 1e6 ? `${+(v / 1e6).toFixed(1)}M` : `${Math.round(v / 1e3)}k`;
 }
+/** Main colour of a category's ribbon (share images use it as their glow). */
+export const catColor = (cat) => (RIBBONS[cat] || RIBBONS.fun)[0];
 const isEmoji = (s) => /\p{Extended_Pictographic}/u.test(s);
 
 /**
@@ -78,7 +80,7 @@ export function medalSVG({ key, cat, metal, locked = false, text: raw, unit = ''
   const emoji = isEmoji(text);
   const fs = emoji ? 22 : text.length >= 5 ? 12.5 : text.length >= 4 ? 15 : text.length >= 3 ? 18 : 21;
   const shape = (SHAPES[cat] || SHAPES.consistency)();
-  return `<svg class="medal ${locked ? 'locked' : metal}" width="${size}" height="${size * 1.12}" viewBox="0 0 100 112" role="img" aria-hidden="true">
+  return `<svg xmlns="http://www.w3.org/2000/svg" class="medal ${locked ? 'locked' : metal}" width="${size}" height="${size * 1.12}" viewBox="0 0 100 112" role="img" aria-hidden="true">
     <defs>
       <linearGradient id="${id}g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${hi}"/><stop offset=".55" stop-color="${mid}"/><stop offset="1" stop-color="${lo}"/></linearGradient>
       <linearGradient id="${id}r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${rb}"/><stop offset="1" stop-color="${rbDark}"/></linearGradient>

@@ -5,7 +5,8 @@ import * as Ex from './exercises.js';
 import * as Timer from './timer.js';
 import { Outbox } from './outbox.js';
 import * as A from './achievements.js';
-import { medalSVG } from './medals.js';
+import { medalSVG, catColor } from './medals.js';
+import * as Share from './share.js';
 import { icon, logo, googleG } from './icons.js';
 import { t, getLang, setLang, locale } from './i18n.js';
 
@@ -22,7 +23,7 @@ const STEP_OPTIONS = [1, 1.25, 2.5, 5];
 
 // ---------- per-device preferences ----------
 const PREFS_KEY = 'gt:prefs';
-const prefs = { rest: 90, autoRest: true, notify: false, volume: 0.8, vibration: 2, step: 2.5, theme: 'system' };
+const prefs = { rest: 90, autoRest: true, notify: false, volume: 0.8, vibration: 2, step: 2.5, theme: 'system', shareFormat: 'story', shareName: true };
 try { Object.assign(prefs, JSON.parse(localStorage.getItem(PREFS_KEY) || '{}')); } catch { /* no storage */ }
 const savePrefs = () => { try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch { /* ignore */ } };
 function applyTheme() {
@@ -557,7 +558,8 @@ function viewHome() {
       <section class="card">
         <h3>${icon('trophy')} ${t('home.prs')}</h3>
         ${recentPrs.length ? `<ul class="pr-list">${recentPrs.map((e) => `<li><button class="link" data-action="open-ex" data-name="${esc(e.exercise)}">${esc(Ex.exName(e.exercise))}</button>
-          <span>${fmtW(e.weight)} × ${fmtN(e.reps)}</span><span class="muted">${relDay(e.date)}</span></li>`).join('')}</ul>`
+          <span>${fmtW(e.weight)} × ${fmtN(e.reps)}</span><span class="muted">${relDay(e.date)}</span>
+          <button class="icon-btn sm" data-action="share-record" data-e="${esc(S.me.email)}" data-id="${esc(e.id)}" aria-label="${t('share.record')}">${icon('share')}</button></li>`).join('')}</ul>`
           : `<p class="muted">${t('home.noPrs')}</p>`}
       </section>
       ${solo() ? '' : `<section class="card">
@@ -645,6 +647,7 @@ function viewLog() {
           <ol class="sets">${list.map((e, i) => `<li>${setLine(e, i, prs)}</li>`).join('')}</ol>
         </article>`;
       }).join('')}
+      ${byEx.size ? `<button class="btn ghost block share-day" data-action="share-workout">${icon('share')} ${t('share.workout')}</button>` : ''}
       ${attendance.map((e) => `<div class="attendance-row">${icon('check')}<span>${t('log.attended')}</span>
         <button class="icon-btn sm" data-action="del-entry" data-id="${esc(e.id)}" aria-label="${t('common.delete')}">${icon('trash')}</button></div>`).join('')}
       </div>`;
@@ -892,7 +895,10 @@ const sheetMetric = (name) => (hasWeight(name) ? S.sheet.metric || 'e1rm' : 'rep
 function sheetRecordsView(name) {
   if (!targetEntries().some((e) => e.exercise === name)) return `<p class="muted pad">${t('ex.noHistory')}</p>`;
   const metric = sheetMetric(name);
+  const best = St.exerciseSummary(targetEntries(), name);
+  const top = best.e1rm.value > 0 ? best.e1rm.set : best.reps.set;
   return `${recordsBlock(name, targetEntries())}
+    <button class="btn ghost block share-rec" data-action="share-record" data-e="${esc(target())}" data-id="${esc(top.id)}">${icon('share')} ${t('share.record')}</button>
     <div class="toolbar sheet-metrics">${metricChips(name, metric, 'sheet-metric')}</div>
     <div class="card chart-card"><div class="chart-box sm"><canvas id="sheet-chart" aria-label="${t(`metric.${metric}`)}"></canvas></div>
       <p class="fine">${t(`metric.${metric}.help`)}</p></div>
@@ -1221,6 +1227,7 @@ function achievementsSheet() {
           <strong>${esc(tier.name ? A.tr(tier.name) : A.tr(tier.label))}</strong>
           ${tier.name ? `<span class="muted">${esc(A.tr(tier.label))}</span>` : ''}
           <em>${tier.date ? fmtDate(tier.date) : tier === f.next && f.value > 0 ? tierProgress(f, tier) : '—'}</em>
+          ${tier.date ? `<button class="btn ghost sm" data-action="share-ach" data-e="${esc(who.email)}" data-key="${esc(`${f.id}:${tier.th}`)}">${icon('share')} ${t('share.share')}</button>` : ''}
         </div>`).join('')}</div>` : ''}
     </article>`;
   };
@@ -1267,8 +1274,8 @@ function checkUnlocks(email) {
   const u = fresh[0];
   const who = email === S.me.email ? '' : `${member(email)?.name.split(' ')[0] || ''}: `;
   toast(fresh.length === 1 ? `${who}${t('ach.toast', { name: tierName(u.family, u.tier) })}` : `${who}${t('ach.toastMany', { n: fresh.length })}`, {
-    media: medalOf(u.family, u.tier, { size: 34 }), action: t('ach.see'), duration: 7000,
-    onAction: () => openAchievements(email, fresh.length === 1 ? u.family.cat : 'all', fresh.length === 1 ? u.family.id : null),
+    media: medalOf(u.family, u.tier, { size: 34 }), action: fresh.length === 1 ? t('share.share') : t('ach.see'), duration: 7000,
+    onAction: () => (fresh.length === 1 ? openShare(achievementCard(email, u.key)) : openAchievements(email)),
   });
 }
 
@@ -1324,6 +1331,7 @@ window.addEventListener('popstate', () => {
   }
 });
 $modal.addEventListener('close', () => {
+  if (shareState) { if (shareState.url) URL.revokeObjectURL(shareState.url); shareState = null; }
   if (nav.modal && !nav.fromPop) { nav.modal = false; navPop(); }
 });
 
@@ -1633,7 +1641,7 @@ function saveSet() {
     const entry = { id: uid(), date: S.day, exercise: sh.name, sets: 1, reps, weight, notes: '' };
     S.group.entries.push({ ...entry, email: who });
     S.outbox.add(gid, entry, who);
-    if (St.prIds(targetEntries()).has(entry.id)) toast(t('ex.newPr'), { ic: 'trophy' });
+    if (St.prIds(targetEntries()).has(entry.id)) toast(t('ex.newPr'), { ic: 'trophy', action: t('share.share'), onAction: () => openShare(recordCard(who, entry.id)) });
     // Only while actually training: back-filling a past day doesn't need rest.
     if (prefs.autoRest && S.day === St.todayISO()) Timer.start(prefs.rest, timerOptions());
     navigator.vibrate?.(20);
@@ -1643,6 +1651,122 @@ function saveSet() {
   renderSheet();
   // After the PR notice, if any.
   setTimeout(() => S.group?.id === gid && checkUnlocks(who), 1200);
+}
+
+// ---------- Share images ----------
+// A card (texts already formatted here) is drawn by share.js; the modal previews it and hands the PNG to
+// the share sheet (Instagram, WhatsApp, TikTok…) or downloads it where there's no sheet.
+let shareState = null;
+const firstName = (email) => (member(email)?.name || '').trim().split(' ')[0];
+
+function workoutCard(email, day) {
+  const all = entriesOf(email);
+  const es = all.filter((e) => e.date === day && e.exercise);
+  const prs = St.prIds(all);
+  const byEx = groupByExercise(es);
+  const rows = [...byEx].map(([name, list]) => {
+    const weighted = list.some((e) => e.weight !== 0);
+    const best = list.reduce((a, e) => ((weighted ? St.e1rm(e.weight, e.reps) > St.e1rm(a.weight, a.reps) : +e.reps > +a.reps) ? e : a));
+    const sets = list.reduce((a, e) => a + (e.sets || 1), 0);
+    return { name: Ex.exName(name), sub: t('log.sets', { n: sets }), value: weighted ? `${fmtW(shownW(name, best.weight))} × ${fmtN(best.reps)}` : t('unit.reps', { n: fmtN(best.reps) }), pr: list.some((e) => prs.has(e.id)) };
+  });
+  const sets = es.reduce((a, e) => a + (e.sets || 1), 0);
+  const nPrs = es.filter((e) => prs.has(e.id)).length;
+  const streak = St.weekStreak(all);
+  return {
+    type: 'workout', eyebrow: t('card.workout'), title: fmtLong(day),
+    stats: [[fmtN(byEx.size), t('log.exercises', { n: byEx.size })], [fmtN(sets), t('log.setsWord', { n: sets })], [fmtKg(St.volume(es)), t('log.volume')]],
+    rows, more: (n) => t('card.more', { n }),
+    pills: [nPrs ? t('card.prs', { n: nPrs }) : '', streak > 1 ? t('card.streak', { n: streak }) : ''].filter(Boolean),
+    date: fmtDate(day), owner: email,
+  };
+}
+
+function achievementCard(email, key) {
+  const a = achOf(email);
+  const u = a.unlocked.find((x) => x.key === key);
+  if (!u) return null;
+  const f = a.families.find((x) => x.id === u.family.id) || u.family;
+  const cat = A.ACH_CATS.find(([id]) => id === f.cat);
+  return {
+    type: 'achievement', eyebrow: t('card.achievement'), color: catColor(f.cat),
+    medal: medalOf(f, u.tier, { size: 600 }), title: tierName(f, u.tier),
+    sub: u.tier.name ? `${A.tr(f.title)} · ${A.tr(u.tier.label)}` : A.tr(u.tier.label),
+    pill: f.tiers.length > 1 ? `${t('ach.level', { n: u.tier.i + 1, total: f.tiers.length })} · ${A.tr(cat[1])}` : A.tr(cat[1]),
+    pill2: t('card.count', { n: fmtN(a.done), total: fmtN(a.total) }),
+    date: fmtDate(u.date), owner: email,
+  };
+}
+
+function recordCard(email, id) {
+  const all = entriesOf(email);
+  const i = all.findIndex((e) => e.id === id);
+  const e = all[i];
+  if (!e) return null;
+  const name = e.exercise;
+  // Best of the same exercise before this set (earlier days, or earlier in the same day).
+  const before = all.filter((x, j) => x.exercise === name && (x.date < e.date || (x.date === e.date && j < i)));
+  const weighted = e.weight !== 0;
+  let delta = t('card.first');
+  let up = false;
+  if (before.length && weighted) {
+    const prev = Math.max(...before.map((x) => St.e1rm(x.weight, x.reps)));
+    const now = St.e1rm(e.weight, e.reps);
+    if (now > prev && prev > 0) { delta = t('card.delta', { d: `+${fmtN(now - prev, 1)} kg`, p: fmtPct((now - prev) / prev) }); up = true; }
+    else delta = t('card.best', { v: `${fmtN(Math.max(prev, now), 1)} kg` });
+  } else if (before.length) {
+    const prev = Math.max(...before.map((x) => +x.reps || 0));
+    if (e.reps > prev) { delta = t('card.deltaReps', { n: e.reps - prev }); up = true; } else delta = t('card.best', { v: t('unit.reps', { n: fmtN(prev) }) });
+  }
+  return {
+    type: 'record', eyebrow: t('card.record'), title: Ex.exName(name),
+    big: weighted ? `${fmtW(shownW(name, e.weight))} × ${fmtN(e.reps)}` : t('unit.reps', { n: fmtN(e.reps) }),
+    sub: weighted && e.weight > 0 ? t('card.e1rm', { v: `${fmtN(St.e1rm(e.weight, e.reps), 1)} kg` }) : Ex.catLabel(Ex.categoryOf(name)),
+    delta, up, date: fmtDate(e.date), owner: email,
+  };
+}
+
+function openShare(card) {
+  if (!card) return;
+  shareState = { card, file: null, url: null, seq: 0 };
+  openModal(`${modalHead(t('share.title'))}
+    <div class="share-preview ${prefs.shareFormat}" id="share-preview"><span class="spinner"></span></div>
+    <div class="share-opts">
+      <div class="seg">${['story', 'post'].map((f) => `<button class="${prefs.shareFormat === f ? 'on' : ''}" data-action="share-format" data-v="${f}">${t(`share.${f}`)}</button>`).join('')}</div>
+      <label class="switch-label"><span>${t('share.name')}</span><span class="switch"><input type="checkbox" data-change="share-name" ${prefs.shareName ? 'checked' : ''}><i></i></span></label>
+    </div>
+    <footer class="modal-foot share-foot">
+      <button class="btn ghost" data-action="share-download" disabled>${icon('download')} ${t('share.download')}</button>
+      <button class="btn primary" data-action="share-go" disabled>${icon('share')} ${t('share.share')}</button>
+    </footer>`, 'share-modal');
+  drawShare();
+}
+
+async function drawShare() {
+  const st = shareState;
+  if (!st) return;
+  const seq = ++st.seq;
+  const card = { ...st.card, name: prefs.shareName ? firstName(st.card.owner) : '' };
+  const canvas = await Share.render(card, prefs.shareFormat);
+  const blob = await Share.toBlob(canvas);
+  if (seq !== st.seq || shareState !== st) return;
+  if (st.url) URL.revokeObjectURL(st.url);
+  st.url = URL.createObjectURL(blob);
+  st.file = new File([blob], `gymtracker-${card.type}-${St.todayISO()}.png`, { type: 'image/png' });
+  const box = document.getElementById('share-preview');
+  if (!box) return;
+  box.className = `share-preview ${prefs.shareFormat}`;
+  box.innerHTML = `<img src="${st.url}" alt="${esc(card.title)}">`;
+  $modal.querySelectorAll('[data-action^="share-"][disabled]').forEach((b) => { b.disabled = false; });
+}
+
+function downloadShare() {
+  const a = document.createElement('a');
+  a.href = shareState.url;
+  a.download = shareState.file.name;
+  document.body.append(a);
+  a.click();
+  a.remove();
 }
 
 // ---------- modals ----------
@@ -2014,6 +2138,24 @@ const actions = {
     renderSheet();
     document.getElementById(`ach-${S.sheet.open}`)?.scrollIntoView({ block: 'nearest' });
   },
+  'share-workout': () => openShare(workoutCard(target(), S.day)),
+  'share-record': (el) => openShare(recordCard(el.dataset.e || target(), el.dataset.id)),
+  'share-ach': (el) => openShare(achievementCard(el.dataset.e || S.me.email, el.dataset.key)),
+  'share-format': (el) => {
+    prefs.shareFormat = el.dataset.v;
+    savePrefs();
+    el.parentElement.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === el));
+    drawShare();
+  },
+  'share-download': () => shareState?.file && downloadShare(),
+  'share-go': () => {
+    const st = shareState;
+    if (!st?.file) return;
+    // Straight from the tap (the share sheet needs a user gesture); no sheet on most desktops → download.
+    if (navigator.canShare?.({ files: [st.file] })) {
+      navigator.share({ files: [st.file] }).catch((e) => { if (e.name !== 'AbortError') downloadShare(); });
+    } else downloadShare();
+  },
   'go-challenges': () => { S.groupTab = 'challenges'; setTab('group'); },
   'picker-cat': (el) => { S.sheet.cat = el.dataset.cat; refreshPicker(); },
   pick: (el) => {
@@ -2336,6 +2478,7 @@ document.addEventListener('input', (e) => {
 document.addEventListener('change', (e) => {
   const el = e.target;
   if (el.dataset?.change === 'compare') { S.compare = el.checked; render(); }
+  if (el.dataset?.change === 'share-name') { prefs.shareName = el.checked; savePrefs(); drawShare(); }
   if (el.dataset?.change === 'open-logging') {
     const open = el.checked;
     const gid = S.group.id;

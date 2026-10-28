@@ -510,7 +510,7 @@ body:has(#restbar.show) .fab { bottom: calc(var(--nav-h) + var(--safe-b) + 92px)
 .cat-bars li { display: grid; grid-template-columns: minmax(0, 7.5em) 1fr 2.5em; align-items: center; gap: 10px; font-size: 14px; }
 .cat-name { display: flex; align-items: center; gap: 8px; font-weight: 600; white-space: nowrap; overflow: hidden; }
 .cat-bars b { text-align: right; font-variant-numeric: tabular-nums; }
-.pr-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; font-size: 14.5px; font-variant-numeric: tabular-nums; }
+.pr-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 10px; align-items: center; font-size: 14.5px; font-variant-numeric: tabular-nums; }
 .pr-list .link { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .activity li { display: flex; align-items: center; gap: 10px; }
 .activity li > div { flex: 1; min-width: 0; display: grid; }
@@ -574,6 +574,18 @@ body:has(#restbar.show) .fab { bottom: calc(var(--nav-h) + var(--safe-b) + 92px)
 .ach-tier .muted { font-size: 11.5px; line-height: 1.2; }
 .ach-tier em { font-style: normal; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 #toast .medal { filter: none; }
+.ach-tier .btn.sm { margin-top: 6px; height: 30px; padding: 0 10px; font-size: 12.5px; gap: 5px; }
+.ach-tier .btn.sm .ic { width: 15px; height: 15px; }
+
+/* ============ Share images ============ */
+.share-day { margin-top: 12px; }
+.share-rec { margin: 2px 0 14px; }
+.share-preview { display: grid; place-items: center; margin: 0 auto 14px; border-radius: 16px; overflow: hidden; background: #0B0B0D; aspect-ratio: 9 / 16; max-height: 52vh; }
+.share-preview.post { aspect-ratio: 4 / 5; }
+.share-preview img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.share-preview .spinner { border-color: rgb(255 255 255 / .2); border-top-color: var(--accent); }
+.share-opts { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+.modal-foot.share-foot { display: grid; justify-content: stretch; grid-template-columns: 1fr 1.4fr; gap: 10px; }
 
 /* Logging for another member */
 .log-for { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
