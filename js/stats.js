@@ -253,7 +253,9 @@ export function improvementSeries(entries, r, keep = () => true, by = 'e1rm') {
 export function weeklySeries(entries, r, metric, keep = () => true) {
   const scoped = entries.filter((e) => e.exercise && inRange(e, r) && keep(e));
   if (!scoped.length) return [];
-  const first = weekStart(r.from > '0000-01-01' ? r.from : scoped.reduce((a, e) => (e.date < a ? e.date : a), scoped[0].date));
+  // From the first week with data, not the start of the period: a long period would otherwise open with a
+  // run of empty weeks from before the person started.
+  const first = weekStart(scoped.reduce((a, e) => (e.date < a ? e.date : a), scoped[0].date));
   const totals = new Map();
   for (const e of scoped) {
     const w = weekStart(e.date);
