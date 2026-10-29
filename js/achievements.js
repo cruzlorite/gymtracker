@@ -262,8 +262,13 @@ export function face(f, th) {
   }
   if (f.id.startsWith('spec-')) return { text: String(th), unit: tr(UNITS.setstotal) };
   if (f.lift) return f.label === kg ? { text: String(th), unit: 'kg' } : f.label === plus ? { text: `+${th}`, unit: 'kg' } : { text: String(th), unit: 'reps' };
-  return { text: String(th), unit: tr(UNITS[f.id]) };
+  const unit = tr(UNITS[f.id]);
+  return { text: String(th), unit: th === 1 ? ONE[unit] || unit : unit };
 }
+// Singular units, for the tiers of exactly 1 ("1 día", not "1 días").
+const ONE = { días: 'día', days: 'day', semanas: 'semana', weeks: 'week', findes: 'finde', wknds: 'wknd', récords: 'récord', PRs: 'PR',
+  veces: 'vez', times: 'time', pirámides: 'pirámide', pyramids: 'pyramid', retos: 'reto', wins: 'win', meses: 'mes', months: 'month',
+  challenges: 'challenge', ejercicios: 'ejercicio', exercises: 'exercise', grupos: 'grupo', groups: 'group', series: 'serie', sets: 'set', reps: 'rep' };
 
 export const TOTAL = FAMILIES.reduce((a, f) => a + f.tiers.length, 0);
 

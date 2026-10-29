@@ -65,7 +65,8 @@ const isAssisted = (name) => Boolean(Ex.exerciseInfo(name).assisted);
 /** The weight field shows the help as a positive number on assisted exercises. */
 const shownW = (name, w) => (isAssisted(name) && typeof w === 'number' ? Math.abs(w) : w);
 const fmtKg = (n) => (n >= 10000 ? `${fmtN(n / 1000, 1)} t` : `${fmtN(n)} kg`);
-const fmtPct = (p) => `${p > 0 ? '+' : ''}${fmtN(p * 100, 1)} %`;
+// Rounded first, so a tiny change shows "0 %" rather than "+0 %" or "−0 %".
+const fmtPct = (p) => { const v = Math.round(p * 1000) / 10; return `${v > 0 ? '+' : ''}${fmtN(v === 0 ? 0 : v, 1)} %`; };
 const fmtDate = (iso) => df({ day: 'numeric', month: 'short' }).format(St.parseISO(iso));
 const fmtLong = (iso) => cap(df({ weekday: 'long', day: 'numeric', month: 'long' }).format(St.parseISO(iso)));
 const fmtMonth = (d) => cap(df({ month: 'long', year: 'numeric' }).format(d));
@@ -539,7 +540,7 @@ function viewHome() {
       <div class="tile"><span>${t('ranking.streak')}</span><strong>${t('unit.weeks', { n: fmtN(St.weekStreak(es)) })}</strong></div>
       <div class="tile"><span>${t('home.month')}</span><strong>${t('home.sessions', { n: fmtN(St.attendance(es, { from: monthFrom, to: today })) })}</strong></div>
       <div class="tile"><span>${t('home.weekVolume')}</span><strong>${fmtKg(St.volume(es, week))}</strong></div>
-      <div class="tile"><span>${t('home.improvement30')}</span><strong class="${imp30 > 0 ? 'up' : imp30 < 0 ? 'down' : ''}">${imp30 == null ? '—' : fmtPct(imp30)}</strong></div>
+      <div class="tile"><span>${t('home.improvement30')}</span><strong class="${imp30 >= 0.0005 ? 'up' : imp30 <= -0.0005 ? 'down' : ''}">${imp30 == null ? '—' : fmtPct(imp30)}</strong></div>
       <div class="tile"><span>${t('home.monthPrs')}</span><strong>${fmtN(monthPrs)}</strong></div>
     </div>
     ${homeAchievements()}
@@ -557,8 +558,8 @@ function viewHome() {
       </section>
       <section class="card">
         <h3>${icon('trophy')} ${t('home.prs')}</h3>
-        ${recentPrs.length ? `<ul class="pr-list">${recentPrs.map((e) => `<li><button class="link" data-action="open-ex" data-name="${esc(e.exercise)}">${esc(Ex.exName(e.exercise))}</button>
-          <span>${fmtW(e.weight)} × ${fmtN(e.reps)}</span><span class="muted">${relDay(e.date)}</span>
+        ${recentPrs.length ? `<ul class="pr-list">${recentPrs.map((e) => `<li><span class="pr-name"><button class="link" data-action="open-ex" data-name="${esc(e.exercise)}">${esc(Ex.exName(e.exercise))}</button>
+          <span class="muted">${relDay(e.date)}</span></span><span>${fmtW(e.weight)} × ${fmtN(e.reps)}</span>
           <button class="icon-btn sm" data-action="share-record" data-e="${esc(S.me.email)}" data-id="${esc(e.id)}" aria-label="${t('share.record')}">${icon('share')}</button></li>`).join('')}</ul>`
           : `<p class="muted">${t('home.noPrs')}</p>`}
       </section>
@@ -859,6 +860,12 @@ function mountChart() {
       pointRadius: 2.5, pointHoverRadius: 5, borderWidth: me ? 3 : 2,
     };
   }).filter((d) => d.data.length);
+  if (!datasets.length) {
+    // An empty chart only shows broken axes: say why there's nothing yet instead.
+    const gain = metric === 'improvement' || metric === 'weightGain';
+    canvas.parentElement.outerHTML = `<div class="chart-empty">${icon('chart')}<p>${t('progress.noChartData')}${gain ? ` ${t('progress.noChartGain')}` : ''}</p></div>`;
+    return;
+  }
   S.chart = drawChart(canvas, datasets, metric, compare, isWeekly(sel, metric));
 }
 
@@ -874,8 +881,8 @@ function drawChart(canvas, datasets, metric, legend, weekly = false) {
       responsive: true, maintainAspectRatio: false, animation: { duration: 300 },
       interaction: { mode: 'nearest', intersect: false },
       scales: {
-        x: { type: 'linear', ticks: { color: text, maxTicksLimit: 6, callback: (v) => df({ day: 'numeric', month: 'short' }).format(new Date(v)) }, grid: { color: grid } },
-        y: { ticks: { color: text, callback: (v) => fmtMetric(metric, v, 0) }, grid: { color: grid } },
+        x: { type: 'linear', bounds: 'data', ticks: { color: text, maxTicksLimit: 6, callback: (v) => df({ day: 'numeric', month: 'short' }).format(new Date(v)) }, grid: { color: grid } },
+        y: { ticks: { color: text, callback: (v) => fmtMetric(metric, v, Number.isInteger(v) ? 0 : 1) }, grid: { color: grid } },
       },
       plugins: {
         legend: { display: legend, labels: { color: text, usePointStyle: true, boxWidth: 8 } },
@@ -1161,8 +1168,8 @@ function nextRow(f, email) {
   const tier = f.next;
   return `<li><button class="ach-next" data-action="achievements" data-e="${esc(email)}" data-cat="${f.cat}" data-open="${esc(f.id)}">
     ${medalOf(f, tier, { size: 34 })}
-    <span class="ach-next-text"><strong>${esc(tierName(f, tier))}</strong><span class="muted">${esc(A.tr(tier.label))}</span></span>
-    <span class="ach-next-prog"><span class="bar"><i style="width:${tierRatio(f, tier) * 100}%"></i></span><em>${tierProgress(f, tier)}</em></span>
+    <span class="ach-next-text"><span class="ach-next-top"><strong>${esc(tierName(f, tier))}</strong><em>${tierProgress(f, tier)}</em></span>
+      <span class="muted">${esc(A.tr(tier.label))}</span><span class="bar"><i style="width:${tierRatio(f, tier) * 100}%"></i></span></span>
   </button></li>`;
 }
 
@@ -1435,6 +1442,12 @@ function aggregateRow(id) {
   </button>`;
 }
 
+/** Search boost for exercises already logged in this group: what you do is what you're looking for. */
+function usedBoost() {
+  const used = new Set(usedNames());
+  return (e) => (used.has(e.name) ? 8 : 0);
+}
+
 function pickerList() {
   const { q: rawQ, cat } = S.sheet;
   const q = Ex.norm(rawQ || '');
@@ -1446,7 +1459,7 @@ function pickerList() {
     if (q) {
       // Typing a muscle group ("biceps", "pierna") also offers its aggregate.
       const aggs = groups.filter((c) => Ex.score({ name: c.en, es: c.es, tags: (c.words || '').split(',').map((w) => Ex.norm(w)).filter(Boolean) }, q) > 0);
-      const found = Ex.search(inCat, rawQ, (e) => Ex.exName(e.name));
+      const found = Ex.search(inCat, rawQ, (e) => Ex.exName(e.name), usedBoost());
       return aggs.map((c) => aggregateRow(c.id)).join('') + found.map(pickRow).join('') || `<p class="muted pad">${t('picker.noResults')}</p>`;
     }
     html += aggregateRow(cat);
@@ -1456,7 +1469,7 @@ function pickerList() {
   }
   if (q) {
     // Fuzzy, ranked: word order, partial words and small typos are fine ("banca press", "sentadila").
-    const found = Ex.search(inCat, rawQ, (e) => Ex.exName(e.name));
+    const found = Ex.search(inCat, rawQ, (e) => Ex.exName(e.name), usedBoost());
     const create = !Ex.findExisting(rawQ, usedNames())
       ? `<button class="pick-row create" data-action="new-ex" data-name="${esc(rawQ.trim())}">${icon('plus')}<span class="pick-name">${t('picker.create', { name: esc(rawQ.trim()) })}</span></button>`
       : '';

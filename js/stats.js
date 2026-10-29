@@ -201,7 +201,8 @@ export function exerciseSummary(entries, exercise) {
   if (!es.length) return null;
   const best = (score) => es.reduce((a, e) => (score(e) > score(a) ? e : a));
   const top = best((e) => e1rm(e.weight, e.reps));
-  const heaviest = best((e) => +e.weight || 0);
+  // Ties on weight go to the set with more reps (20 kg × 6 beats an earlier 20 kg × 5).
+  const heaviest = best((e) => (+e.weight || 0) + (+e.reps || 0) * 1e-4);
   const bestSet = best((e) => (+e.reps || 0) * (+e.weight || 0));
   const mostReps = best((e) => +e.reps || 0);
   const sessions = dailySeries(es, exercise, 'volume');

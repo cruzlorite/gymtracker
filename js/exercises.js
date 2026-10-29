@@ -495,10 +495,19 @@ export function score(e, q) {
   return Math.max(best, 40 + 30 * (total / qWords.length) + 12 * coverage);
 }
 
-/** Exercises matching the query, best first (ties by the given name order). */
-export function search(list, rawQuery, nameOf = (e) => e.name) {
+// The staples most people log: among similar matches they come first ("bench" → Bench press, not Bench dips).
+const STAPLES = new Set(['Bench press', 'Squat', 'Deadlift', 'Overhead press', 'Barbell row', 'Pull-ups', 'Chin-ups', 'Lat pulldown',
+  'Barbell curl', 'Dumbbell curl', 'Hammer curl', 'Leg press', 'Romanian deadlift', 'Hip thrust', 'Dips', 'Push-ups', 'Leg curl',
+  'Leg extension', 'Lateral raise', 'Triceps pushdown', 'Incline dumbbell press', 'Dumbbell bench press', 'Seated cable row',
+  'Dumbbell row', 'Lunges']);
+
+/**
+ * Exercises matching the query, best first (ties by the given name order).
+ * @param {(e) => number} [boost] extra points, e.g. for exercises the person already does
+ */
+export function search(list, rawQuery, nameOf = (e) => e.name, boost = () => 0) {
   const q = norm(rawQuery);
-  return list.map((e) => ({ e, s: score(e, q) })).filter((x) => x.s > 0)
+  return list.map((e) => { const s = score(e, q); return { e, s: s > 0 ? s + (STAPLES.has(e.name) ? 6 : 0) + boost(e) : 0 }; }).filter((x) => x.s > 0)
     .sort((a, b) => b.s - a.s || nameOf(a.e).localeCompare(nameOf(b.e)))
     .map((x) => x.e);
 }
