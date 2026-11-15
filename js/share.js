@@ -181,6 +181,12 @@ async function blocksFor(ctx, card, format) {
       spacer(story ? 30 : 14), rows(ctx, list, story ? 112 : 104),
       ...(card.pills.length ? [spacer(story ? 30 : 10), ...card.pills.slice(0, story ? 2 : 1).map((p) => pill(ctx, p))] : [])];
   }
+  if (card.type === 'challenge') {
+    const max = story ? 6 : 4;
+    return [eyebrow(ctx, card.eyebrow, GOLD), title(ctx, card.title, story ? 76 : 64), line(ctx, card.sub, 34, MUTED),
+      spacer(story ? 40 : 16), ...(card.winner ? [line(ctx, '🏆', story ? 130 : 90, INK), pill(ctx, card.winner, GOLD, 'rgb(242 194 50 / .14)'), spacer(story ? 30 : 10)] : []),
+      rows(ctx, card.rows.slice(0, max), story ? 104 : 92)];
+  }
   if (card.type === 'achievement') {
     const medal = await svgImage(card.medal);
     return [eyebrow(ctx, card.eyebrow, card.color), spacer(story ? 30 : 6), image(ctx, medal, story ? 560 : 330), spacer(story ? 40 : 20),

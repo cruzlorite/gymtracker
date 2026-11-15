@@ -266,6 +266,7 @@ form { display: grid; gap: 16px; }
   .has-nav .nav-item:hover { background: var(--surface-2); color: var(--text); }
   .has-nav .nav-item.on { background: var(--surface-2); }
   .has-nav .nav-item.on .ic { background: none; color: var(--accent-text); }
+  .has-nav .nav-badge { position: static; margin-left: auto; box-shadow: none; }
   .has-nav .appbar-logo { display: none; }
   .has-nav .main, .has-nav .main-log { padding-bottom: 48px; }
   .appbar { padding-left: 24px; padding-right: 20px; }
@@ -519,11 +520,61 @@ body:has(#restbar.show) .fab { bottom: calc(var(--nav-h) + var(--safe-b) + 92px)
 .activity li .muted { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 1100px) { .home-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 760px) { .home-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.home-ch { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
-.link-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 8px 0; background: none; border: 0; text-align: left; color: inherit; }
-.home-ch-main { flex: 1; min-width: 0; display: grid; }
-.home-ch-main strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.home-ch-main .muted { font-size: 13px; }
+/* Challenges at the top of Home */
+.home-ch-sec { margin-bottom: 14px; }
+.home-sec-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 10px; }
+.home-sec-head h2 { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 750; }
+.home-sec-head h2 .ic { width: 19px; height: 19px; color: var(--gold); }
+.home-sec-head .count { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 99px; background: var(--accent); color: var(--accent-ink); font-size: 12.5px; font-weight: 800; }
+.home-sec-head .link { color: var(--muted); font-size: 14px; }
+.hch-strip { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; margin: 0 -16px; padding: 2px 16px 6px; }
+.hch-strip::-webkit-scrollbar { display: none; }
+.hch { flex: 0 0 min(86%, 380px); scroll-snap-align: center; display: grid; align-content: start; gap: 10px; padding: 16px; border-radius: var(--r-lg);
+  background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); cursor: pointer; min-width: 0; }
+.hch-strip.one .hch { flex-basis: 100%; }
+.hch:hover { border-color: var(--faint); }
+.hch-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.hch-top .badge { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hch h3 { font-size: 17px; font-weight: 750; letter-spacing: -.01em; }
+.hch-time { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.hch-time .bar { display: block; height: 6px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.hch-time .bar i { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.hch.urgent { border-color: #F2994A; }
+.hch.urgent .hch-time .bar i { background: #F2994A; }
+.hch.urgent .status.live { color: #E07A1F; }
+.hch-podium { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.hch-podium li { display: flex; align-items: center; gap: 9px; padding: 4px 8px; border-radius: 10px; font-size: 14.5px; }
+.hch-podium li.me { background: var(--accent-soft); }
+.hch-podium li.gap { justify-content: center; padding: 0; color: var(--faint); line-height: 1; }
+.hch-podium .pos { display: grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--surface-2); font-size: 12px; font-weight: 800; }
+.hch-podium .pos.p1 { background: #F2C232; color: #5C4300; }
+.hch-podium .pos.p2 { background: #CDD3DA; color: #3F4750; }
+.hch-podium .pos.p3 { background: #E2A273; color: #5C2F12; }
+.hch-podium .name { flex: 1; min-width: 0; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hch-podium .val { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hch-gap { font-size: 14px; font-weight: 650; color: var(--accent-text); }
+.hch.ended .winner { margin: 0; }
+.hch .btn.sm { justify-self: start; }
+.hch-soon { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 8px; padding: 10px 12px; border-radius: 12px; border: 1px dashed var(--line); background: none; color: var(--muted); font-size: 13.5px; text-align: left; }
+.hch-soon .ic { flex: none; width: 17px; height: 17px; }
+.hch-soon strong { color: var(--text); }
+@media (min-width: 760px) {
+  .hch-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); overflow: visible; margin: 0; padding: 0; }
+  .hch-strip.one { grid-template-columns: minmax(0, 560px); }
+}
+.nav-item { position: relative; }
+.challenge { scroll-margin-top: calc(var(--safe-t) + 72px); }
+.ch-history-btn { margin-top: 10px; }
+.ch-chart-modal .seg { margin-bottom: 12px; }
+.ch-chart-box { height: 280px; margin-bottom: 8px; }
+.lead-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.lead-list li { display: grid; grid-template-columns: auto minmax(0, 7em) 1fr auto; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; }
+.lead-list li > span:not(.bar):not(.av) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lead-list .bar { display: block; height: 8px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.lead-list .bar i { display: block; height: 100%; border-radius: inherit; }
+.lead-list b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.nav-badge { position: absolute; top: 5px; left: calc(50% + 10px); display: grid; place-items: center; min-width: 17px; height: 17px; padding: 0 4px;
+  border-radius: 99px; background: #F2994A; color: #fff; font-size: 10.5px; font-weight: 800; font-style: normal; box-shadow: 0 0 0 2px var(--surface); }
 
 /* ============ Achievements ============ */
 .medal { display: block; flex: none; overflow: visible; filter: drop-shadow(0 2px 3px rgb(16 16 20 / .18)); }

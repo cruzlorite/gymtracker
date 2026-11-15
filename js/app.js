@@ -402,7 +402,7 @@ function shell(content) {
     ${tabs ? `<nav class="nav" aria-label="${t('nav.label')}">
       <button class="nav-brand" data-action="tab" data-tab="home" aria-label="${t('nav.home')}">${logo(30)}<span class="wordmark">GymTracker</span></button>
       ${visibleTabs().map(([k, ic]) => `<button class="nav-item ${S.tab === k ? 'on' : ''}" data-action="tab" data-tab="${k}" ${S.tab === k ? 'aria-current="page"' : ''}>
-        ${icon(ic)}<span>${t(`nav.${k}`)}</span></button>`).join('')}
+        ${icon(ic)}<span>${t(`nav.${k}`)}</span>${k === 'group' && liveChallenges() ? `<b class="nav-badge" aria-label="${t('home.chLive', { n: liveChallenges() })}">${liveChallenges()}</b>` : ''}</button>`).join('')}
     </nav>` : ''}
     <div class="page">
       <header class="appbar">
@@ -535,6 +535,7 @@ function viewHome() {
         : `<div><h2>${t('home.todayEmpty')}</h2><p class="muted">${t('home.todayEmptyText')}</p></div>
            <button class="btn primary lg" data-action="start-workout">${icon('plus')} ${t('home.start')}</button>`}
     </section>
+    ${homeChallenges()}
     <div class="home-tiles">
       <div class="tile week-tile"><span>${t('home.week')}</span>
         <div class="week-dots">${weekDays.map((d) => `<i class="${trained.has(d) ? 'on' : ''} ${d === today ? 'today' : ''}" title="${esc(fmtLong(d))}">${df({ weekday: 'narrow' }).format(St.parseISO(d))}</i>`).join('')}</div>
@@ -547,7 +548,6 @@ function viewHome() {
     </div>
     ${homeAchievements()}
     <div class="grid two">
-      ${homeChallenges()}
       <section class="card">
         <h3>${icon('chart')} ${t('home.volumeTrend')}</h3>
         <div class="vol-bars">${vols.map((v, i) => `<div class="vol-col ${i === 7 ? 'now' : ''}" title="${fmtKg(v)}"><i style="height:${Math.max(v ? 4 : 0, v / maxVol * 100)}%"></i><span>${df({ day: 'numeric', month: 'short' }).format(St.parseISO(weeks[i]))}</span></div>`).join('')}</div>
@@ -876,7 +876,8 @@ function mountChart() {
 }
 
 /** A line chart over time for one metric, styled from the current theme. */
-function drawChart(canvas, datasets, metric, legend, weekly = false) {
+function drawChart(canvas, datasets, metric, legend, weekly = false, { yFmt, ranks = 0 } = {}) {
+  // yFmt: own value labels (challenge scores); ranks: positions 1…n on a reversed axis, 1 on top.
   const css = getComputedStyle(document.documentElement);
   const text = css.getPropertyValue('--muted').trim();
   const grid = css.getPropertyValue('--line').trim();
@@ -888,14 +889,15 @@ function drawChart(canvas, datasets, metric, legend, weekly = false) {
       interaction: { mode: 'nearest', intersect: false },
       scales: {
         x: { type: 'linear', bounds: 'data', ticks: { color: text, maxTicksLimit: 6, callback: (v) => df({ day: 'numeric', month: 'short' }).format(new Date(v)) }, grid: { color: grid } },
-        y: { ticks: { color: text, callback: (v) => fmtMetric(metric, v, Number.isInteger(v) ? 0 : 1) }, grid: { color: grid } },
+        y: { ...(ranks ? { reverse: true, min: 1, max: ranks } : {}),
+          ticks: { color: text, ...(ranks ? { stepSize: 1 } : {}), callback: (v) => (yFmt ? yFmt(v) : fmtMetric(metric, v, Number.isInteger(v) ? 0 : 1)) }, grid: { color: grid } },
       },
       plugins: {
         legend: { display: legend, labels: { color: text, usePointStyle: true, boxWidth: 8 } },
         tooltip: { callbacks: {
           title: (items) => (weekly ? t('progress.weekOf', { date: df({ day: 'numeric', month: 'long' }).format(new Date(items[0].parsed.x)) })
             : cap(df({ weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(items[0].parsed.x)))),
-          label: (it) => ` ${it.dataset.label}: ${fmtMetric(metric, it.parsed.y)}`,
+          label: (it) => ` ${it.dataset.label}: ${yFmt ? yFmt(it.parsed.y) : fmtMetric(metric, it.parsed.y)}`,
         } },
       },
     },
@@ -1023,15 +1025,7 @@ function viewChallenges() {
   const order = { live: 0, upcoming: 1, finished: 2 };
   const list = [...S.group.challenges].map((c) => ({ c, st: challengeStatus(c) }))
     .sort((a, b) => order[a.st.key] - order[b.st.key] || b.c.start.localeCompare(a.c.start));
-  const fmt = (type, v) => ({
-    attendance: () => t('unit.days', { n: fmtN(v) }),
-    volume: () => fmtKg(v),
-    improvement: () => `${v > 0 ? '+' : ''}${fmtN(v, 1)} %`,
-    sets: () => t('unit.sets', { n: fmtN(v) }),
-    reps: () => t('unit.reps', { n: fmtN(v) }),
-    maxWeight: () => fmtW(v),
-    prs: () => t('unit.prs', { n: fmtN(v) }),
-  }[type] || (() => fmtN(v)))();
+  const fmt = chFmt;
   return `<div class="toolbar"><span class="spacer"></span><button class="btn primary" data-action="new-challenge">${icon('plus')} ${t('ch.new')}</button></div>
     ${list.length ? '' : emptyState('flag', t('ch.emptyTitle'), t('ch.emptyText'))}
     <div class="grid">${list.map(({ c, st }) => {
@@ -1041,7 +1035,7 @@ function viewChallenges() {
       const max = Math.max(...ranked.map((x) => Math.abs(x.v)), 0) || 1;
       const winner = st.key === 'finished' && ranked[0]?.v > 0 ? ranked[0].m : null;
       const creator = member(c.createdBy);
-      return `<article class="card challenge ${st.key}">
+      return `<article class="card challenge ${st.key}" id="ch-${esc(c.id)}">
         <header>
           <div class="challenge-tags"><span class="badge">${t(`ch.${c.type}`)}${c.exercise ? ` · ${esc(Ex.exName(c.exercise))}` : ''}</span><span class="status ${st.key}">${st.label}</span>
             ${c.createdBy === S.me.email || S.group.isOwner ? `<button class="icon-btn sm ch-del" data-action="challenge-delete" data-id="${esc(c.id)}" aria-label="${t('ch.delete')}">${icon('trash')}</button>` : ''}</div>
@@ -1053,7 +1047,8 @@ function viewChallenges() {
             <span class="pos">${i + 1}</span>${avatar(x.m)}<span class="name">${esc(x.m.name)}</span>
             <span class="bar"><i style="width:${Math.max(0, x.v) / max * 100}%;background:${x.m.color}"></i></span>
             <span class="val">${fmt(c.type, x.v)}</span></li>`).join('')}
-          ${rest.map((x) => `<li class="dim"><span class="pos">–</span>${avatar(x.m)}<span class="name">${esc(x.m.name)}</span><span class="bar"></span><span class="val">${t('common.noData')}</span></li>`).join('')}</ol>`}
+          ${rest.map((x) => `<li class="dim"><span class="pos">–</span>${avatar(x.m)}<span class="name">${esc(x.m.name)}</span><span class="bar"></span><span class="val">${t('common.noData')}</span></li>`).join('')}</ol>
+        <button class="btn ghost sm ch-history-btn" data-action="ch-chart" data-id="${esc(c.id)}">${icon('chart')} ${t('ch.history')}</button>`}
       </article>`;
     }).join('')}</div>`;
 }
@@ -1194,29 +1189,92 @@ function homeAchievements() {
   </section>`;
 }
 
-/** Live challenges with my position, plus the ones that finished in the last two weeks. */
+// ---------- Challenges on Home ----------
+// Live ones as cards at the top (time left, podium, and how far you are from the next place), the ones
+// that ended in the last two days with their winner, and a line for those starting within a week.
+const chFmt = (type, v) => ({
+  attendance: () => t('unit.days', { n: fmtN(v) }),
+  volume: () => fmtKg(v),
+  improvement: () => `${v > 0 ? '+' : ''}${fmtN(v, 1)} %`,
+  sets: () => t('unit.sets', { n: fmtN(v) }),
+  reps: () => t('unit.reps', { n: fmtN(v) }),
+  maxWeight: () => fmtW(v),
+  prs: () => t('unit.prs', { n: fmtN(v) }),
+}[type] || (() => fmtN(v)))();
+/** A difference between two scores, in words: "2 días", "1,5 %", "250 kg". */
+const chGapFmt = (type, d) => (type === 'attendance' ? t('gap.days', { n: fmtN(d) }) : type === 'improvement' ? `${fmtN(d, 1)} %`
+  : type === 'maxWeight' ? `${fmtN(d, 2)} kg` : chFmt(type, d));
+const chRanked = (c) => members().map((m) => ({ m, v: St.challengeValue(c, entriesOf(m.email)) }))
+  .filter((x) => x.v != null).sort((a, b) => b.v - a.v);
+const first = (m) => esc(m.name.split(' ')[0]);
+
+function chGap(c, ranked) {
+  const i = ranked.findIndex((x) => x.m.email === S.me.email);
+  // Nothing yet (0 days, 0 records…): "tied with" someone else at zero would read oddly.
+  if (i < 0 || (ranked[i].v === 0 && c.type !== 'improvement')) return t('home.chNoData');
+  const near = (a, b) => Math.abs(a - b) < 0.05;
+  if (i === 0) {
+    const second = ranked[1];
+    if (!second) return t('home.chLeading');
+    return near(ranked[0].v, second.v) ? t('home.chTied', { name: first(second.m) }) : t('home.chAhead', { d: chGapFmt(c.type, ranked[0].v - second.v), name: first(second.m) });
+  }
+  const above = ranked[i - 1];
+  return near(above.v, ranked[i].v) ? t('home.chTied', { name: first(above.m) }) : t('home.chBehind', { d: chGapFmt(c.type, above.v - ranked[i].v), name: first(above.m) });
+}
+
+function chPodium(c, ranked) {
+  const mine = ranked.findIndex((x) => x.m.email === S.me.email);
+  const row = (x, i) => `<li class="${x.m.email === S.me.email ? 'me' : ''}"><span class="pos p${i + 1}">${i + 1}</span>${avatar(x.m)}
+    <span class="name">${esc(x.m.email === S.me.email ? t('common.you') : x.m.name.split(' ')[0])}</span><span class="val">${chFmt(c.type, x.v)}</span></li>`;
+  return `<ol class="hch-podium">${ranked.slice(0, 3).map(row).join('')}${mine > 2 ? `<li class="gap">⋯</li>${row(ranked[mine], mine)}` : ''}</ol>`;
+}
+
 function homeChallenges() {
   if (solo()) return '';
   const today = St.todayISO();
-  const list = (S.group.challenges || []).filter((c) => c.start <= today && c.end >= St.addDays(today, -14))
-    .sort((a, b) => (a.end < today) - (b.end < today) || a.end.localeCompare(b.end)).slice(0, 4);
-  if (!list.length) return '';
-  return `<section class="card">
-    <h3>${icon('flag')} ${t('home.challenges')}</h3>
-    <ul class="home-ch">${list.map((c) => {
-      const st = challengeStatus(c);
-      const ranked = members().map((m) => ({ m, v: St.challengeValue(c, entriesOf(m.email)) })).filter((x) => x.v != null).sort((a, b) => b.v - a.v);
-      const pos = ranked.findIndex((x) => x.m.email === S.me.email);
-      const lead = ranked[0];
-      const line = st.key === 'finished'
-        ? (lead?.v > 0 ? (lead.m.email === S.me.email ? t('home.chYouWon') : t('ch.winner', { name: esc(lead.m.name) })) : t('ch.finished'))
-        : pos === 0 ? t('home.chLeading') : pos > 0 ? t('home.chPos', { n: pos + 1, total: ranked.length, name: esc(lead.m.name) }) : t('home.chNoData');
-      return `<li><button class="link-row" data-action="go-challenges">
-        <span class="home-ch-main"><strong>${esc(c.title)}</strong><span class="muted">${line}</span></span>
-        <span class="status ${st.key}">${st.label}</span></button></li>`;
-    }).join('')}</ul>
+  const all = S.group.challenges || [];
+  const live = all.filter((c) => c.start <= today && c.end >= today).sort((a, b) => a.end.localeCompare(b.end));
+  const ended = all.filter((c) => c.end < today && c.end >= St.addDays(today, -2)).sort((a, b) => b.end.localeCompare(a.end));
+  const soon = all.filter((c) => c.start > today && c.start <= St.addDays(today, 7)).sort((a, b) => a.start.localeCompare(b.start));
+  if (!live.length && !ended.length && !soon.length) return '';
+  const days = (a, b) => Math.round((St.parseISO(b) - St.parseISO(a)) / 864e5);
+  const tag = (c) => `<span class="badge">${t(`ch.${c.type}`)}${c.exercise ? ` · ${esc(Ex.exName(c.exercise))}` : ''}</span>`;
+  const liveCard = (c) => {
+    const ranked = chRanked(c);
+    const total = days(c.start, c.end) + 1;
+    const day = days(c.start, today) + 1;
+    const left = days(today, c.end);
+    const st = challengeStatus(c);
+    return `<article class="hch ${left <= 2 ? 'urgent' : ''}" role="button" tabindex="0" data-action="go-challenges" data-id="${esc(c.id)}">
+      <div class="hch-top">${tag(c)}<span class="status live">${st.label}</span></div>
+      <h3>${esc(c.title)}</h3>
+      <div class="hch-time"><span class="bar"><i style="width:${(day / total) * 100}%"></i></span><span>${t('home.chDay', { n: day, total })}</span></div>
+      ${ranked.length ? chPodium(c, ranked) : ''}
+      <p class="hch-gap">${chGap(c, ranked)}</p>
+    </article>`;
+  };
+  const endedCard = (c) => {
+    const ranked = chRanked(c);
+    const win = ranked[0]?.v > 0 ? ranked[0].m : null;
+    return `<article class="hch ended" role="button" tabindex="0" data-action="go-challenges" data-id="${esc(c.id)}">
+      <div class="hch-top">${tag(c)}<span class="status finished">${t('ch.finished')}</span></div>
+      <h3>${esc(c.title)}</h3>
+      ${win ? `<p class="winner">${icon('trophy')} ${win.email === S.me.email ? t('home.chYouWon') : t('ch.winner', { name: esc(win.name) })}</p>` : ''}
+      ${ranked.length ? chPodium(c, ranked) : ''}
+      <button class="btn ghost sm" data-action="share-challenge" data-id="${esc(c.id)}">${icon('share')} ${t('share.share')}</button>
+    </article>`;
+  };
+  const cards = [...live.map(liveCard), ...ended.map(endedCard)];
+  return `<section class="home-ch-sec">
+    <div class="home-sec-head"><h2>${icon('flag')} ${t('home.challenges')}${live.length ? ` <span class="count">${live.length}</span>` : ''}</h2>
+      <button class="link" data-action="go-challenges">${t('ach.seeAll')}</button></div>
+    ${cards.length ? `<div class="hch-strip ${cards.length === 1 ? 'one' : ''}">${cards.join('')}</div>` : ''}
+    ${soon.map((c) => `<button class="hch-soon" data-action="go-challenges" data-id="${esc(c.id)}">${icon('calendar')}<span>${t('ch.startsOn', { date: fmtDate(c.start) })}: <strong>${esc(c.title)}</strong></span></button>`).join('')}
   </section>`;
 }
+
+/** Live challenges count, for the dot on the Group tab. */
+const liveChallenges = () => { const d = St.todayISO(); return solo() ? 0 : (S.group?.challenges || []).filter((c) => c.start <= d && c.end >= d).length; };
 
 function achievementsSheet() {
   const sh = S.sheet;
@@ -1346,6 +1404,7 @@ window.addEventListener('popstate', () => {
   }
 });
 $modal.addEventListener('close', () => {
+  if (chHistoryChart) { chHistoryChart.destroy(); chHistoryChart = null; }
   if (shareState) { if (shareState.url) URL.revokeObjectURL(shareState.url); shareState = null; }
   if (nav.modal && !nav.fromPop) { nav.modal = false; navPop(); }
 });
@@ -1744,6 +1803,67 @@ function recordCard(email, id) {
     big: weighted ? `${fmtW(shownW(name, e.weight))} × ${fmtN(e.reps)}` : t('unit.reps', { n: fmtN(e.reps) }),
     sub: weighted && e.weight > 0 ? t('card.e1rm', { v: `${fmtN(St.e1rm(e.weight, e.reps), 1)} kg` }) : Ex.catLabel(Ex.categoryOf(name)),
     delta, up, date: fmtDate(e.date), owner: email,
+  };
+}
+
+// ---------- Challenge history ----------
+// Day by day from the start: everyone's score so far, their position and who was leading.
+function challengeHistory(c) {
+  const today = St.todayISO();
+  const to = c.end < today ? c.end : today;
+  const dates = [];
+  for (let d = c.start; d <= to; d = St.addDays(d, 1)) dates.push(d);
+  const people = members().map((m) => ({ m, es: entriesOf(m.email) }));
+  const vals = people.map(({ es }) => dates.map((d) => St.challengeValue({ ...c, end: d }, es)));
+  const ranks = people.map(() => []);
+  const lead = new Map();
+  dates.forEach((d, i) => {
+    const scored = people.map((p, k) => ({ k, v: vals[k][i] })).filter((x) => x.v != null);
+    for (const x of scored) ranks[x.k][i] = 1 + scored.filter((y) => y.v > x.v + 1e-9).length;
+    const top = Math.max(0, ...scored.map((x) => x.v));
+    if (top > 0) for (const x of scored) if (Math.abs(x.v - top) < 1e-9) lead.set(x.k, (lead.get(x.k) || 0) + 1);
+  });
+  return { dates, people, vals, ranks, lead };
+}
+
+let chHistoryChart = null;
+function challengeChartModal(id, mode = 'score') {
+  const c = S.group.challenges.find((x) => x.id === id);
+  if (!c) return;
+  const h = challengeHistory(c);
+  const leaders = [...h.lead].sort((a, b) => b[1] - a[1]);
+  openModal(`${modalHead(esc(c.title))}
+    <div class="seg wide">${['score', 'rank'].map((k) => `<button class="${mode === k ? 'on' : ''}" data-action="ch-chart" data-id="${esc(c.id)}" data-v="${k}">${t(`ch.chart.${k}`)}</button>`).join('')}</div>
+    <div class="chart-box ch-chart-box"><canvas id="ch-chart" aria-label="${t('ch.history')}"></canvas></div>
+    <p class="fine">${t(mode === 'rank' ? 'ch.chart.rankHelp' : 'ch.chart.scoreHelp')}</p>
+    ${leaders.length ? `<h4 class="ach-sub">${t('ch.leaderDays')}</h4><ul class="lead-list">${leaders.map(([k, n]) => `<li>${avatar(h.people[k].m)}<span>${esc(h.people[k].m.name)}</span>
+      <span class="bar"><i style="width:${(n / h.dates.length) * 100}%;background:${h.people[k].m.color}"></i></span><b>${t('gap.days', { n })}</b></li>`).join('')}</ul>` : ''}`, 'ch-chart-modal');
+  if (chHistoryChart) { chHistoryChart.destroy(); chHistoryChart = null; }
+  const canvas = document.getElementById('ch-chart');
+  if (!canvas || !window.Chart) return;
+  const many = h.dates.length > 30;
+  const series = mode === 'rank' ? h.ranks : h.vals;
+  const datasets = h.people.map((p, k) => ({
+    label: p.m.name, borderColor: p.m.color, backgroundColor: p.m.color, borderWidth: p.m.email === S.me.email ? 3.5 : 2,
+    pointRadius: many ? 0 : 2.5, pointHoverRadius: 5, tension: mode === 'rank' ? 0 : 0.25, stepped: mode === 'rank' ? 'middle' : false,
+    data: h.dates.map((d, i) => ({ x: +St.parseISO(d), y: series[k][i] })).filter((pt) => pt.y != null),
+  })).filter((d) => d.data.length);
+  chHistoryChart = drawChart(canvas, datasets, 'e1rm', true, false, mode === 'rank'
+    ? { ranks: h.people.length, yFmt: (v) => t('ch.pos', { n: v }) }
+    : { yFmt: (v) => chFmt(c.type, v) });
+}
+
+function challengeCard(id) {
+  const c = S.group.challenges.find((x) => x.id === id);
+  if (!c) return null;
+  const ranked = chRanked(c);
+  const win = ranked[0]?.v > 0 ? ranked[0].m : null;
+  return {
+    type: 'challenge', eyebrow: t(c.end < St.todayISO() ? 'card.challengeEnded' : 'card.challenge'), title: c.title,
+    sub: `${t(`ch.${c.type}`)}${c.exercise ? ` · ${Ex.exName(c.exercise)}` : ''} · ${fmtDate(c.start)} – ${fmtDate(c.end)}`,
+    winner: win ? t('card.winner', { name: win.name.split(' ')[0] }) : '',
+    rows: ranked.map((x, i) => ({ name: `${i + 1}. ${x.m.name.split(' ')[0]}`, value: chFmt(c.type, x.v), pr: i === 0 && Boolean(win) })),
+    date: fmtDate(c.end), owner: S.me.email,
   };
 }
 
@@ -2177,7 +2297,13 @@ const actions = {
       navigator.share({ files: [st.file] }).catch((e) => { if (e.name !== 'AbortError') downloadShare(); });
     } else downloadShare();
   },
-  'go-challenges': () => { S.groupTab = 'challenges'; setTab('group'); },
+  'go-challenges': (el) => {
+    S.groupTab = 'challenges';
+    if (S.tab === 'group') render(); else setTab('group');
+    if (el.dataset.id) document.getElementById(`ch-${el.dataset.id}`)?.scrollIntoView({ block: 'start' });
+  },
+  'ch-chart': (el) => challengeChartModal(el.dataset.id, el.dataset.v || 'score'),
+  'share-challenge': (el) => openShare(challengeCard(el.dataset.id)),
   'picker-cat': (el) => { S.sheet.cat = el.dataset.cat; refreshPicker(); },
   pick: (el) => {
     const d = defaultsFor(el.dataset.name);
