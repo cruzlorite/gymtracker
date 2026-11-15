@@ -115,8 +115,10 @@ function toast(msg, { error = false, action, onAction, ic, media, duration } = {
     $toast.showPopover();
   }
   $toast.className = `show${error ? ' error' : ''}`;
-  $toast.innerHTML = `${media || (ic ? icon(ic) : '')}<span>${esc(msg)}</span>${action ? `<button class="toast-btn" data-toast-action>${esc(action)}</button>` : ''}`;
+  $toast.innerHTML = `${media || (ic ? icon(ic) : '')}<span>${esc(msg)}</span>${action ? `<button class="toast-btn" data-toast-action>${esc(action)}</button>` : ''}
+    <button class="toast-x" data-toast-close aria-label="${t('common.close')}">${icon('x')}</button>`;
   if (action) $toast.querySelector('[data-toast-action]').onclick = () => { hideToast(); onAction(); };
+  $toast.querySelector('[data-toast-close]').onclick = () => { clearTimeout(toastTimer); hideToast(); };
   toastTimer = setTimeout(hideToast, duration ?? (action ? 15000 : error ? 10000 : 3500));
 }
 
@@ -844,7 +846,9 @@ function viewProgress() {
 function mountChart() {
   const canvas = document.getElementById('chart');
   if (!canvas || !window.Chart) return;
-  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent-text').trim();
+  const css = getComputedStyle(document.documentElement);
+  const accent = css.getPropertyValue('--accent').trim();
+  const ring = css.getPropertyValue('--accent-text').trim();
   const r = St.periodRange(S.period);
   const sel = currentSel();
   const metric = selMetric(sel);
@@ -854,10 +858,12 @@ function mountChart() {
     const data = progressSeries(entriesOf(m.email), sel, metric, r)
       .map((p) => ({ x: +St.parseISO(p.date), y: Math.round(p.value * 10) / 10 }));
     const me = m.email === S.me.email;
-    const color = me && !compare ? accent : m.color;
+    const solo = me && !compare;
+    const color = solo ? accent : m.color;
     return {
       label: m.name, data, borderColor: color, backgroundColor: color, tension: 0.3,
-      pointRadius: 2.5, pointHoverRadius: 5, borderWidth: me ? 3 : 2,
+      pointRadius: solo ? 3.5 : 2.5, pointHoverRadius: 5, borderWidth: me ? 3 : 2,
+      ...(solo ? { pointBorderColor: ring, pointBorderWidth: 1.5 } : {}),
     };
   }).filter((d) => d.data.length);
   if (!datasets.length) {
@@ -917,11 +923,13 @@ function mountSheetChart() {
   if (!canvas || !window.Chart) return;
   const name = S.sheet.name;
   const metric = sheetMetric(name);
-  const color = getComputedStyle(document.documentElement).getPropertyValue('--accent-text').trim();
+  const css = getComputedStyle(document.documentElement);
+  const color = css.getPropertyValue('--accent').trim();
   const data = St.dailySeries(targetEntries(), name, metric).filter((p) => p.value !== 0)
     .map((p) => ({ x: +St.parseISO(p.date), y: Math.round(p.value * 10) / 10 }));
   S.sheetChart = drawChart(canvas, [{
-    label: member(target())?.name || S.me.name, data, borderColor: color, backgroundColor: color, tension: 0.3, pointRadius: 3, pointHoverRadius: 5, borderWidth: 3,
+    label: member(target())?.name || S.me.name, data, borderColor: color, backgroundColor: color, tension: 0.3, pointRadius: 3.5, pointHoverRadius: 5, borderWidth: 3,
+    pointBorderColor: css.getPropertyValue('--accent-text').trim(), pointBorderWidth: 1.5,
   }], metric, false);
 }
 
@@ -1281,7 +1289,7 @@ function checkUnlocks(email) {
   const u = fresh[0];
   const who = email === S.me.email ? '' : `${member(email)?.name.split(' ')[0] || ''}: `;
   toast(fresh.length === 1 ? `${who}${t('ach.toast', { name: tierName(u.family, u.tier) })}` : `${who}${t('ach.toastMany', { n: fresh.length })}`, {
-    media: medalOf(u.family, u.tier, { size: 34 }), action: fresh.length === 1 ? t('share.share') : t('ach.see'), duration: 7000,
+    media: medalOf(u.family, u.tier, { size: 34 }), action: fresh.length === 1 ? t('share.share') : t('ach.see'), duration: 5000,
     onAction: () => (fresh.length === 1 ? openShare(achievementCard(email, u.key)) : openAchievements(email)),
   });
 }
@@ -1654,7 +1662,7 @@ function saveSet() {
     const entry = { id: uid(), date: S.day, exercise: sh.name, sets: 1, reps, weight, notes: '' };
     S.group.entries.push({ ...entry, email: who });
     S.outbox.add(gid, entry, who);
-    if (St.prIds(targetEntries()).has(entry.id)) toast(t('ex.newPr'), { ic: 'trophy', action: t('share.share'), onAction: () => openShare(recordCard(who, entry.id)) });
+    if (St.prIds(targetEntries()).has(entry.id)) toast(t('ex.newPr'), { ic: 'trophy', action: t('share.share'), onAction: () => openShare(recordCard(who, entry.id)), duration: 5000 });
     // Only while actually training: back-filling a past day doesn't need rest.
     if (prefs.autoRest && S.day === St.todayISO()) Timer.start(prefs.rest, timerOptions());
     navigator.vibrate?.(20);

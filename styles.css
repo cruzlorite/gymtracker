@@ -874,6 +874,9 @@ dialog[open] { animation: pop .18s ease-out; }
 #toast .ic { color: var(--accent-on-dark); }
 #toast.error { background: var(--danger); border-color: var(--danger); color: #fff; }
 #toast.error .ic { color: #fff; }
+.toast-x { display: grid; place-items: center; flex: none; width: 30px; height: 30px; margin: -4px -8px -4px -4px; border: 0; border-radius: 8px; background: none; color: inherit; opacity: .7; }
+.toast-x:hover { opacity: 1; background: rgb(255 255 255 / .1); }
+.toast-x .ic { width: 17px; height: 17px; color: inherit !important; }
 .toast-btn { margin-left: 4px; height: 32px; padding: 0 12px; border: 0; border-radius: 9px; background: var(--accent-on-dark); color: var(--accent-on-dark-ink); font-weight: 700; }
 
 /* ============ Landing ============ */

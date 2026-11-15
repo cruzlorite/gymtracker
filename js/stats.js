@@ -238,16 +238,21 @@ export function improvementSeries(entries, r, keep = () => true, by = 'e1rm') {
     const days = dailySeries(es, ex, by).filter((p) => p.value > 0);
     if (days.length >= 2) series.push(days);
   }
-  const dates = [...new Set(series.flatMap((s) => s.map((p) => p.date)))].sort();
-  return dates.map((date) => {
-    const pcts = [];
+  if (!series.length) return [];
+  // Always averaged over the same exercises (those with two days or more in the period), each at 0 % until
+  // its second day. Averaging only over the exercises seen so far made the curve dip whenever a new one
+  // came in below the average; this way it only goes down when an exercise really drops below its first
+  // day, and the last point equals the period's improvement in the tables.
+  const start = series.reduce((a, s) => (s[0].date < a ? s[0].date : a), series[0][0].date);
+  const dates = [...new Set(series.flatMap((s) => s.slice(1).map((p) => p.date)))].sort();
+  return [{ date: start, value: 0 }, ...dates.map((date) => {
+    let sum = 0;
     for (const s of series) {
-      if (s[0].date > date) continue; // not started yet
-      const later = s.filter((p) => p.date > s[0].date && p.date <= date);
-      pcts.push(later.length ? Math.max(...later.map((p) => p.value)) / s[0].value - 1 : 0);
+      if (s[1].date > date) continue;
+      sum += Math.max(...s.filter((p) => p.date > s[0].date && p.date <= date).map((p) => p.value)) / s[0].value - 1;
     }
-    return { date, value: pcts.length ? (pcts.reduce((a, b) => a + b, 0) / pcts.length) * 100 : 0 };
-  });
+    return { date, value: (sum / series.length) * 100 };
+  })];
 }
 
 /** Weekly totals (Monday-based) of volume or sets for the entries that pass `keep`. */
