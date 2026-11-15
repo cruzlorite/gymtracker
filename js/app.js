@@ -535,7 +535,6 @@ function viewHome() {
         : `<div><h2>${t('home.todayEmpty')}</h2><p class="muted">${t('home.todayEmptyText')}</p></div>
            <button class="btn primary lg" data-action="start-workout">${icon('plus')} ${t('home.start')}</button>`}
     </section>
-    ${homeChallenges()}
     <div class="home-tiles">
       <div class="tile week-tile"><span>${t('home.week')}</span>
         <div class="week-dots">${weekDays.map((d) => `<i class="${trained.has(d) ? 'on' : ''} ${d === today ? 'today' : ''}" title="${esc(fmtLong(d))}">${df({ weekday: 'narrow' }).format(St.parseISO(d))}</i>`).join('')}</div>
@@ -546,6 +545,7 @@ function viewHome() {
       <div class="tile"><span>${t('home.improvement30')}</span><strong class="${imp30 >= 0.0005 ? 'up' : imp30 <= -0.0005 ? 'down' : ''}">${imp30 == null ? '—' : fmtPct(imp30)}</strong></div>
       <div class="tile"><span>${t('home.monthPrs')}</span><strong>${fmtN(monthPrs)}</strong></div>
     </div>
+    ${homeChallenges()}
     ${homeAchievements()}
     <div class="grid two">
       <section class="card">
